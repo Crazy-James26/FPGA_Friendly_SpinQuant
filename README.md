@@ -32,8 +32,11 @@ There are two missing model parameter files due to super large size
 FPGA_Friendly_SpinQuant/src/parameters/lm_head.bin
 FPGA_Friendly_SpinQuant/src/parameters/model_embed_tokens_fp32.bin
 ```
-Please download from 
-
+Please download from https://drive.google.com/drive/folders/149QLnEm-NT3fhCgB4Uy7Xda1oLu2zk-7?usp=sharing, And put them in 
+```
+FPGA_Friendly_SpinQuant/src/parameters/
+FPGA_Friendly_SpinQuant/run/parameters/
+```
 
 ## Requirements
 

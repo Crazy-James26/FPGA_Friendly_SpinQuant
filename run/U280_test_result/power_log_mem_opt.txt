@@ -1,0 +1,148 @@
+  Max Power              : 225 Watts
+  Power                  : 36.239731 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 31.665178 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 35.972269 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.843460 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 42.006504 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 40.985881 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 42.438017 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.519740 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.425837 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 36.565468 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 31.913211 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 35.915048 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 34.097710 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 36.112237 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 42.299352 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.529218 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 42.944502 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 42.312590 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.789501 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 43.205993 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.178967 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 37.623694 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 31.985194 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 35.567992 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 36.246986 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 31.719527 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 36.066424 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 40.782004 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.690376 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 43.464707 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.995283 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 40.990001 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 41.624756 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 36.363132 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 35.626208 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 35.794171 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current
+  Max Power              : 225 Watts
+  Power                  : 35.789118 Watts
+  Power Warning          : false
+  Power Rails            : Voltage   Current

@@ -1,0 +1,3 @@
+I0831 21:52:47.674 tapa.util:162] logging level set to INFO
+I0831 21:52:47.674 __main__:90] tapa version: 0.1.20250803
+I0831 21:52:47.677 tapa.steps.gcc:57] running g++ command: g++ -std=c++17 -DHLS_NO_XIL_FPO_LIB -isystem/home/jameszhang23/.rapidstream-tapa/usr/include -Wno-attributes -Wno-unknown-pragmas -Wno-unused-label '-D__builtin_FILE()=__FILE__' '-D__builtin_LINE()=__LINE__' -isystem/mnt/software/xilinx/Vitis_HLS/2024.1/include SpinQuant_Prefilling_Decoding_mem_opt_tb.cpp -o SpinQuant_Prefilling_Decoding_mem_opt -Wl,-rpath,/home/jameszhang23/.rapidstream-tapa/usr/lib -L/home/jameszhang23/.rapidstream-tapa/usr/lib -ltapa -lcontext -lthread -lfrt -lglog -lgflags -lOpenCL -ltinyxml2 -lyaml-cpp -lstdc++fs

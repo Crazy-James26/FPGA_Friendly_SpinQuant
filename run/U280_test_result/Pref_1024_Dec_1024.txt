@@ -1,0 +1,2 @@
+Average prefilling kernel time over 3 runs: 1.66152 s
+Average decoding kernel time over 3 runs: 9.86104 s

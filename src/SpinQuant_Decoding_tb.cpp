@@ -325,12 +325,15 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
 
     // initFloatVec(w_s_sum_qkvo_FFN_mmap, 2);
     for(int i = 0; i < DECODER_LAYER_NUM; i++) {
-        int bias = w_s_kv_addr_bias + i * KV_HIDDEN_DIM_PAD;
-        for(int j = 0; j < KV_HIDDEN_DIM; j++){
-            w_s_sum_qkvo_FFN_mmap[bias + j][0] = w_k_proj_s[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + j][1] = w_k_proj_sum[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + KV_HIDDEN_DIM + j][0] = w_v_proj_s[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + KV_HIDDEN_DIM + j][1] = w_v_proj_sum[i][j];
+        for(int t = 0; t < T_QKVO_FFN_BLOCK_PARALLEL; t++){
+            int bias_k = w_s_kv_addr_bias + i * KV_HIDDEN_DIM_PAD + t * KV_HIDDEN_DIM_PAD/T_QKVO_FFN_BLOCK_PARALLEL;
+            int bias_v = bias_k + KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL;
+            for(int j = 0; j < KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL; j++){
+                w_s_sum_qkvo_FFN_mmap[bias_k + j][0] = w_k_proj_s[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_k + j][1] = w_k_proj_sum[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_v + j][0] = w_v_proj_s[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_v + j][1] = w_v_proj_sum[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+            }
         }
     }
 
@@ -413,10 +416,10 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
             rand_seeds_mmap[i] = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
         }
         
-        // // Zero out the io vectors
-        // for (int idx = 0; idx < (MAX_DEC_SEQ_LEN * (DECODER_LAYER_NUM + 1) + 1) * io_init_vecs; idx++) {
-        //     io_mmap[idx] = 0.0f;
-        // }
+        // Zero out the io vectors
+        for (int idx = 0; idx < io_mmap.size(); idx++) {
+            io_mmap[idx] = 0.0f;
+        }
 
         // // Random init first token's embedding
         // int first_token_idx = rand() % VOCAB_SIZE;
@@ -431,22 +434,31 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
             return;
         }
         int id;
-        while (fin >> id) {
+        while (fin >> id && token_idx.size() < MAX_PRE_SEQ_LEN)  {
             token_idx.push_back(id);
         }
         std::cout << "Loaded " << token_idx.size() << " tokens:\n";
 
+        // for (size_t idx = 0; idx < io_init_vecs; ++idx) {
+        //     io_mmap[idx] = vocab_lib[token_idx[token_idx.size() - 1] * io_init_vecs + idx];
+        // }
+
+        // for(int n = 0; n < 16; n ++){
+        //     for (size_t idx = 0; idx < 8; ++idx) {
+        //         cout << vocab_lib[token_idx[token_idx.size() - 1 - n] * io_init_vecs + idx][0] << " ";
+        //     }
+        //     cout << endl;
+        // }
+
         for (size_t idx = 0; idx < io_init_vecs; ++idx) {
-            io_mmap[idx] = vocab_lib[token_idx[token_idx.size() - 1] * io_init_vecs + idx];
-        }
-        for(int n = 0; n < 16; n ++){
-            for (size_t idx = 0; idx < 4; ++idx) {
-                for(int k = 0; k < T_BLOCK_PARALLEL; k++)
-                    cout << vocab_lib[token_idx[token_idx.size() - 1 - n] * io_init_vecs + idx][k] << " ";
-            }
-            cout << endl;
+            io_mmap[idx] = vocab_lib[128000 * io_init_vecs + idx];
         }
 
+        // for (size_t idx = 0; idx < io_init_vecs; ++idx) {
+        //     for(int k = 0; k < T_BLOCK_PARALLEL; k++){
+        //         io_mmap[idx][k] = (k * io_init_vecs + idx + 1) * 0.001 - 1.5;
+        //     }
+        // }
 
         // Random init KV caches
         for (int i = 0; i < MAX_SUM_SEQ_LEN; i++) {
@@ -462,6 +474,7 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
                         int sub_idx = i % DEC_K_PARALLEL;
                         if(i < MAX_PRE_SEQ_LEN){
                             k_caches[h/(KV_HEAD_NUM/DEC_HEAD_PARALLEL)][idx][sub_idx] = ap_int<8>(qval_k);
+                            // k_caches[h/(KV_HEAD_NUM/DEC_HEAD_PARALLEL)][idx][sub_idx] = ap_int<8>(0);
                         }
                         else {
                             k_caches[h/(KV_HEAD_NUM/DEC_HEAD_PARALLEL)][idx][sub_idx] = ap_int<8>(0);
@@ -473,6 +486,7 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
                         sub_idx = j % DEC_V_PARALLEL;
                         if(i < MAX_PRE_SEQ_LEN){
                             v_caches[h/(KV_HEAD_NUM/DEC_HEAD_PARALLEL)][idx][sub_idx] = ap_int<8>(qval_v);
+                            // v_caches[h/(KV_HEAD_NUM/DEC_HEAD_PARALLEL)][idx][sub_idx] = ap_int<8>(0);
                         }
                         else {
                             v_caches[h/(KV_HEAD_NUM/DEC_HEAD_PARALLEL)][idx][sub_idx] = ap_int<8>(0);
@@ -502,13 +516,19 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
             tapa::read_only_mmap<hls::vector<float, T_BLOCK_PARALLEL>>(gamma_beta_mmap),
             tapa::read_only_mmap<float>(rand_seeds_mmap),
             tapa::write_only_mmap<int>(sampled_token_idx_mmap),
-            MAX_PRE_SEQ_LEN,
-            MAX_DEC_SEQ_LEN
+            // MAX_PRE_SEQ_LEN,
+            0,
+            MAX_DEC_SEQ_LEN/2
         );
             
         double t_s = kernel_time_ns * 1e-9;
         std::cout << "  Run " << run << " — kernel time: " << t_s << " s\n";
         total_time_ns += kernel_time_ns;
+
+        for(int i = 0; i < 32; i++) std::cout << io_mmap[i][0] << " ";
+        std::cout << std::endl;
+        for(int i = 0; i < 32; i++) std::cout << io_mmap[MAX_DEC_SEQ_LEN * (HIDDEN_DIM/T_BLOCK_PARALLEL) + i][0] << " ";
+        std::cout << std::endl;
 
         char fname[256];
         std::snprintf(fname, sizeof(fname), "my_sampled_token_idx_%d.txt", run);

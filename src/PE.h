@@ -479,7 +479,7 @@ void PE_i4xi4_pack_2x2_1xDSP_2D(
 }
 
 
-template <int max_log2_k_size = 10, bool is_last_A = false, bool is_last_B = false>
+template <bool is_uint_A = false, int max_log2_k_size = 10, bool is_last_A = false, bool is_last_B = false>
 void PE_i8xi8_pack_1x2_1xDSP_2D(
     hls::stream<ap_int<8>>& A_in, 
     hls::stream<ap_int<8>>& A_out,
@@ -504,7 +504,11 @@ void PE_i8xi8_pack_1x2_1xDSP_2D(
         ap_int<8> b0_sign_ex = b[7] ? ap_int<8>(-1) : ap_int<8>(0);
         ap_int<25> pack_b = (b1_temp, b0_sign_ex, b0);
 
-        ap_int<32> pack_c = a * pack_b;
+        ap_int<32> pack_c;
+        if(is_uint_A)
+            pack_c = ap_uint<8>(a) * pack_b;
+        else
+            pack_c = a * pack_b;
         ap_int<16> c0 = pack_c.range(15, 0);
         ap_int<16> c1 = pack_c.range(31, 16);
         ap_uint<1> c0_b = c0[15];
@@ -519,7 +523,7 @@ void PE_i8xi8_pack_1x2_1xDSP_2D(
 
 
 
-template <int max_log2_k_size = 10, bool is_last_A = false, bool is_last_B = false>
+template <bool is_uint_A = false, int max_log2_k_size = 10, bool is_last_A = false, bool is_last_B = false>
 void PE_i8xi8_pack_2x2_2xDSP_2D( 
     hls::stream<ap_uint<16>>& A_in, 
     hls::stream<ap_uint<16>>& A_out,
@@ -550,8 +554,16 @@ void PE_i8xi8_pack_2x2_2xDSP_2D(
         ap_int<8> b0_sign_ex = b[7] ? ap_int<8>(-1) : ap_int<8>(0);
         ap_int<25> pack_b = (b1_temp, b0_sign_ex, b0);
 
-        ap_int<32> pack_c_0 = a0 * pack_b;
-        ap_int<32> pack_c_1 = a1 * pack_b;
+        ap_int<32> pack_c_0;
+        ap_int<32> pack_c_1;
+        if(is_uint_A){
+            pack_c_0 = ap_uint<8>(a0) * pack_b;
+            pack_c_1 = ap_uint<8>(a1) * pack_b;
+        }
+        else{
+            pack_c_0 = a0 * pack_b;
+            pack_c_1 = a1 * pack_b;
+        }
         ap_int<16> c00 = pack_c_0.range(15, 0);
         ap_int<16> c01 = pack_c_0.range(31, 16);
         ap_int<16> c10 = pack_c_1.range(15, 0);
@@ -778,7 +790,7 @@ void PE_i4xi4_pack_1x2_1D(
 
 
 
-template <int max_log2_k_size = 10, bool is_last_A = false>
+template <bool is_uint_A = false, int max_log2_k_size = 10, bool is_last_A = false>
 void PE_i8xi8_pack_1x2_1xDSP_1D(
     hls::stream<ap_int<8>>& A_in, 
     hls::stream<ap_int<8>>& A_out,
@@ -801,7 +813,11 @@ void PE_i8xi8_pack_1x2_1xDSP_1D(
         ap_int<8> b0_sign_ex = b[7] ? ap_int<8>(-1) : ap_int<8>(0);
         ap_int<25> pack_b = (b1_temp, b0_sign_ex, b0);
 
-        ap_int<32> pack_c = a * pack_b;
+        ap_int<32> pack_c;
+        if(is_uint_A)
+            pack_c = ap_uint<8>(a) * pack_b;
+        else
+            pack_c = a * pack_b;
         ap_int<16> c0 = pack_c.range(15, 0);
         ap_int<16> c1 = pack_c.range(31, 16);
         ap_uint<1> c0_b = c0[15];

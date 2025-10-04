@@ -420,6 +420,14 @@ void dec_io_buffer(
             }
         }
 
+        // if(block_parallel_in == T_QKVO_FFN_BLOCK_PARALLEL && block_parallel_out == DEC_HEAD_PARALLEL){
+        //     cout << "data_reg: ";
+        //     for(int i = 0; i < io_hidden_dim; i++) {
+        //         cout << data_reg[i] << " "; 
+        //     }
+        //     cout << endl;
+        // }
+
         repeated_loop: for(int i = 0; i < repeated_times; i++) {
             out_buf_loop: for (int k = 0; k < io_hidden_dim/block_parallel_out; k++) {    // L19
             #pragma HLS loop_tripcount min=1 max=max_hidden_dim/block_parallel_out

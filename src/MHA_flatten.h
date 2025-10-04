@@ -5,7 +5,7 @@
 #include "data_io.h"
 
 
-template <int block_size_b, int max_log2_k_size = log2_HIDDEN_DIM>
+template <int block_size_b, int max_log2_k_size = log2_HIDDEN_DIM, bool is_uint_A = false>
 void systolic_array_i8xi8_pack_1x2_flatten_1D(
     tapa::istream<ap_int<8>>& A_loader,
     tapa::istream<hls::vector<ap_int<8>, block_size_b>>& B_loader, 
@@ -41,9 +41,9 @@ void systolic_array_i8xi8_pack_1x2_flatten_1D(
     for (int n = 0; n < block_size_b/2; n++) {
     #pragma HLS UNROLL
         if(n == block_size_b/2 - 1)
-            PE_i8xi8_pack_1x2_1xDSP_1D<max_log2_k_size, true>(A_fifo[n], A_fifo[n+1], B_fifo[n], C_fifo[n], k_size);
+            PE_i8xi8_pack_1x2_1xDSP_1D<is_uint_A, max_log2_k_size, true>(A_fifo[n], A_fifo[n+1], B_fifo[n], C_fifo[n], k_size);
         else
-            PE_i8xi8_pack_1x2_1xDSP_1D<max_log2_k_size>(A_fifo[n], A_fifo[n+1], B_fifo[n], C_fifo[n], k_size);
+            PE_i8xi8_pack_1x2_1xDSP_1D<is_uint_A, max_log2_k_size>(A_fifo[n], A_fifo[n+1], B_fifo[n], C_fifo[n], k_size);
     }
     
   
@@ -59,7 +59,7 @@ template <typename T, int head_parallel, int K_parallel, int mha_head_num, int m
 void dec_MHA_qxk_input_broadcastor_template(
     tapa::istream<hls::vector<T, head_parallel>>& input_seq,
     tapa::ostreams<T, head_parallel>& input_loaders,
-    int seq_id
+    int seq_len
 ){
     hls::vector<T, head_parallel> A[mha_head_num/head_parallel * mha_head_dim];
 
@@ -69,7 +69,7 @@ void dec_MHA_qxk_input_broadcastor_template(
     }
 
     attn_head_loop: for (int H = 0; H < mha_head_num/head_parallel; H++){
-        k_weight_block_loop: for(int N = 0; N < (seq_id + K_parallel - 1) / K_parallel; N++){
+        k_weight_block_loop: for(int N = 0; N < (seq_len + K_parallel - 1) / K_parallel; N++){
         #pragma HLS loop_tripcount min=1 max=max_sum_seq_len/K_parallel
             init_block_AB: for(int k = 0; k < mha_head_dim; k++){
             #pragma HLS PIPELINE II=1
@@ -82,17 +82,17 @@ void dec_MHA_qxk_input_broadcastor_template(
 }
 
 
-template <int head_parallel, int K_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int log2_mha_head_dim = log2_HEAD_DIM, int max_sum_seq_len=MAX_SUM_SEQ_LEN>
+template <int head_parallel, int K_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int log2_mha_head_dim = log2_HEAD_DIM, int max_sum_seq_len=MAX_SUM_SEQ_LEN, bool is_uint_input=false>
 void dec_MHA_i8xi8_qxk_flatten_template(
     tapa::istream<ap_int<8>>& input_loader,
     tapa::istream<hls::vector<ap_int<8>, K_parallel>>& weight_loader,
     tapa::ostream<ap_int<log2_mha_head_dim + 16>>& output_drainer,
-    int seq_id
+    int seq_len
 ){
     attn_head_loop: for (int H = 0; H < mha_head_num/head_parallel; H++){
-        k_weight_block_loop: for(int N = 0; N < (seq_id + K_parallel - 1) / K_parallel; N++){
+        k_weight_block_loop: for(int N = 0; N < (seq_len + K_parallel - 1) / K_parallel; N++){
         #pragma HLS loop_tripcount min=1 max=max_sum_seq_len/K_parallel
-            systolic_array_i8xi8_pack_1x2_flatten_1D<K_parallel, log2_mha_head_dim>(
+            systolic_array_i8xi8_pack_1x2_flatten_1D<K_parallel, log2_mha_head_dim, is_uint_input>(
                 input_loader, weight_loader, output_drainer, mha_head_dim
             );
         }
@@ -103,10 +103,10 @@ template <typename T, int head_parallel, int K_parallel, int mha_head_num, int m
 void dec_MHA_qxk_output_merger_template(
     tapa::istreams<T, head_parallel>& output_drainers,
     tapa::ostream<hls::vector<T, head_parallel>>& output_seq,
-    int seq_id
+    int seq_len
 ){
     attn_head_loop: for (int H = 0; H < mha_head_num/head_parallel; H++){
-        k_weight_block_loop: for(int N = 0; N < (seq_id + K_parallel - 1) / K_parallel; N++){
+        k_weight_block_loop: for(int N = 0; N < (seq_len + K_parallel - 1) / K_parallel; N++){
         #pragma HLS loop_tripcount min=1 max=max_sum_seq_len/K_parallel
         output_scale_loop: for (int n = 0; n < K_parallel; n++) {    // L41
             #pragma HLS pipeline II=1
@@ -125,13 +125,13 @@ template <typename T, int head_parallel, int V_parallel, int mha_head_num, int m
 void dec_MHA_axv_input_broadcastor_template(
     tapa::istream<hls::vector<T, head_parallel>>& input_seq,
     tapa::ostreams<T, head_parallel>& input_loaders,
-    int seq_id
+    int seq_len
 ){
     T A[head_parallel][max_sum_seq_len];
     #pragma HLS ARRAY_PARTITION variable=A complete dim=1
 
     attn_head_loop: for (int H = 0; H < mha_head_num/head_parallel; H++){
-        in_buf_loop: for (int k = 0; k < seq_id; k++) {    // L19
+        in_buf_loop: for (int k = 0; k < seq_len; k++) {    // L19
         #pragma HLS loop_tripcount min=1 max=max_sum_seq_len
         #pragma HLS pipeline II=1
             hls::vector<T, head_parallel> A_pack = input_seq.read();
@@ -141,7 +141,7 @@ void dec_MHA_axv_input_broadcastor_template(
         }
 
         v_weight_block_loop: for(int N = 0; N < mha_head_dim/V_parallel; N++){
-            init_block_AB: for(int k = 0; k < seq_id; k++){
+            init_block_AB: for(int k = 0; k < seq_len; k++){
             #pragma HLS loop_tripcount min=1 max=max_sum_seq_len
             #pragma HLS PIPELINE II=1
                 for (int i = 0; i < head_parallel; i++) {
@@ -154,17 +154,17 @@ void dec_MHA_axv_input_broadcastor_template(
 
 
 
-template <int head_parallel, int V_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int max_sum_seq_len = MAX_SUM_SEQ_LEN, int log2_max_sum_seq_len = log2_MAX_SUM_SEQ_LEN>
+template <int head_parallel, int V_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int max_sum_seq_len = MAX_SUM_SEQ_LEN, int log2_max_sum_seq_len = log2_MAX_SUM_SEQ_LEN, bool is_uint_input=false>
 void dec_MHA_i8xi8_axv_flatten_template(
     tapa::istream<ap_int<8>>& input_loader,
     tapa::istream<hls::vector<ap_int<8>, V_parallel>>& weight_loader,
     tapa::ostream<ap_int<log2_max_sum_seq_len + 16>>& output_drainer,
-    int seq_id
+    int seq_len
 ){
     attn_head_loop: for (int H = 0; H < mha_head_num/head_parallel; H++){
         v_weight_block_loop: for(int N = 0; N < mha_head_dim/V_parallel; N++){
-            systolic_array_i8xi8_pack_1x2_flatten_1D<V_parallel, log2_max_sum_seq_len>(
-                input_loader, weight_loader, output_drainer, seq_id
+            systolic_array_i8xi8_pack_1x2_flatten_1D<V_parallel, log2_max_sum_seq_len, is_uint_input>(
+                input_loader, weight_loader, output_drainer, seq_len
             );
         }
     }

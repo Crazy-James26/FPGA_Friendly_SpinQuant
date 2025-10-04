@@ -210,6 +210,25 @@ void pref_weight_loader_discard(
     }
 }
 
+
+template <typename T, int weight_parallel, int io_parallel, int max_input_dim = HIDDEN_DIM, int max_output_dim = HIDDEN_DIM, int max_seq_len = MAX_PRE_SEQ_LEN>
+void pref_weight_loader_buffer(
+    tapa::istream<hls::vector<T, weight_parallel>>& weight_stream_in,
+    tapa::ostream<hls::vector<T, weight_parallel>>& weight_stream_out,
+    int block_id,
+    int seq_len = max_seq_len,
+    int input_hidden_dim = max_input_dim, 
+    int output_hidden_dim = max_output_dim
+){
+    io_block_loop: for (int M = 0; M < seq_len/io_parallel; M++){
+        read_weight_loop: for(int i = 0; i < ((output_hidden_dim + weight_parallel - 1)/weight_parallel)*input_hidden_dim; i++){
+        #pragma HLS pipeline II=1
+            weight_stream_out.write(weight_stream_in.read());
+        }
+    }
+}
+
+
 template <typename T, int weight_parallel, int weight_port_merge_num, int io_parallel, int max_input_dim = HIDDEN_DIM, int max_output_dim = HIDDEN_DIM, int max_seq_len = MAX_PRE_SEQ_LEN>
 void pref_weight_stream_merger(
     tapa::istreams<hls::vector<T, weight_parallel>, weight_port_merge_num>& weight_streams,
@@ -250,6 +269,23 @@ void pref_weight_s_loader_fp32(
         #pragma HLS pipeline II=1
             hls::vector<float, 1+is_act_asym> w_pack = weight_s_sum_mmap[bias + i];
             weight_s_sum_stream.write(w_pack);
+        }
+    }
+}
+
+
+template <int io_parallel, bool is_act_asym=false, int max_output_dim = HIDDEN_DIM, int max_seq_len = MAX_PRE_SEQ_LEN>
+void pref_weight_s_loader_buffer_fp32(
+    tapa::istream<hls::vector<float, 1+is_act_asym>>& weight_s_sum_stream_in,
+    tapa::ostream<hls::vector<float, 1+is_act_asym>>& weight_s_sum_stream_out,
+    int block_id,
+    int seq_len = max_seq_len,
+    int output_hidden_dim = max_output_dim
+){
+    io_block_loop: for (int M = 0; M < seq_len/io_parallel; M++){
+        weight_sum_loop: for(int i = 0; i < output_hidden_dim; i++){
+        #pragma HLS pipeline II=1
+            weight_s_sum_stream_out.write(weight_s_sum_stream_in.read());
         }
     }
 }
@@ -332,9 +368,7 @@ void pref_Linear_Layer_i4xi4_blocked(
         in_buf_loop: for (int k = 0; k < input_hidden_dim; k++) {    // L19
         #pragma HLS pipeline II=1
             auto temp_pack = input_seq.read();
-            for(int i = 0; i < block_num; i++){
-                A[k] = temp_pack;
-            }
+            A[k] = temp_pack;
         }
 
         weight_block_loop: for(int N = 0; N < ((output_hidden_dim + weight_parallel - 1)/weight_parallel); N++){
@@ -706,18 +740,21 @@ void dec_weight_loader_int4_pack_2(
         }
         weight_stream.write(data_pack);
     }
+}
 
-    // read_weight_loop: for(int i_req = 0, i_resp = 0; i_resp < output_hidden_dim/(block_parallel*weight_parallel)*input_hidden_dim;){
-    // #pragma HLS pipeline II=1
-    //     read_async_mmap_pack<4, 2, weight_parallel>(
-    //         weight_mmap,
-    //         weight_stream,
-    //         addr_bias + block_id * output_hidden_dim/(block_parallel*weight_parallel)*input_hidden_dim,
-    //         output_hidden_dim/(block_parallel*weight_parallel)*input_hidden_dim,
-    //         i_req,
-    //         i_resp
-    //     );
-    // }
+
+template <typename T, int block_parallel, int weight_parallel, int max_input_dim = HIDDEN_DIM, int max_output_dim = HIDDEN_DIM>
+void dec_weight_loader_buffer(
+    tapa::istream<hls::vector<T, weight_parallel>>& weight_stream_in,
+    tapa::ostream<hls::vector<T, weight_parallel>>& weight_stream_out,
+    int block_id,
+    int input_hidden_dim = max_input_dim, 
+    int output_hidden_dim = max_output_dim
+){
+    read_weight_loop: for(int i = 0; i < output_hidden_dim/(block_parallel*weight_parallel)*input_hidden_dim; i++) {
+    #pragma HLS pipeline II=1
+        weight_stream_out.write(weight_stream_in.read());
+    }
 }
 
 
@@ -737,6 +774,19 @@ void dec_weight_s_loader_fp32(
     }
 }
 
+template <int block_parallel, bool is_act_asym=false, int max_output_dim = HIDDEN_DIM>
+void dec_weight_s_loader_buffer_fp32(
+    tapa::istream<hls::vector<float, block_parallel * (1+is_act_asym)>>& weight_s_sum_stream_in,
+    tapa::ostream<hls::vector<float, block_parallel * (1+is_act_asym)>>& weight_s_sum_stream_out,
+    int block_id,
+    int output_hidden_dim = max_output_dim
+){
+    read_weight_loop: for(int i = 0; i < output_hidden_dim/block_parallel; i++) {
+    #pragma HLS pipeline II=1
+        weight_s_sum_stream_out.write(weight_s_sum_stream_in.read());
+    }
+}
+
 
 template <int block_parallel, bool is_act_asym=false, int max_output_dim = HIDDEN_DIM>
 void dec_weight_s_loader_fp32_bandwidth(
@@ -747,10 +797,31 @@ void dec_weight_s_loader_fp32_bandwidth(
     int addr_bias = 0
 ){
     int bias = addr_bias + block_id * output_hidden_dim;
+    // read_weight_loop: for(int i = 0; i < output_hidden_dim; i++){
+    // #pragma HLS pipeline II=1
+    //     hls::vector<float, 1+is_act_asym> in_pack = weight_s_sum_mmap[bias + i];
+    //     weight_s_sum_stream.write(in_pack);
+    // }
+    read_weight_loop: for(int i = 0; i < output_hidden_dim/block_parallel; i++) {
+        for(int j = 0; j < block_parallel; j++) {
+        #pragma HLS pipeline II=1
+            hls::vector<float, 1+is_act_asym> in_pack = weight_s_sum_mmap[bias + j*(output_hidden_dim/block_parallel) + i];
+            weight_s_sum_stream.write(in_pack);
+        }
+    }
+}
+
+
+template <int block_parallel, bool is_act_asym=false, int max_output_dim = HIDDEN_DIM>
+void dec_weight_s_loader_buffer_fp32_bandwidth(
+    tapa::istream<hls::vector<float, 1+is_act_asym>>& weight_s_sum_stream_in,
+    tapa::ostream<hls::vector<float, 1+is_act_asym>>& weight_s_sum_stream_out,
+    int block_id,
+    int output_hidden_dim = max_output_dim
+){
     read_weight_loop: for(int i = 0; i < output_hidden_dim; i++){
     #pragma HLS pipeline II=1
-        hls::vector<float, 1+is_act_asym> in_pack = weight_s_sum_mmap[bias + i];
-        weight_s_sum_stream.write(in_pack);
+        weight_s_sum_stream_out.write(weight_s_sum_stream_in.read());
     }
 }
 

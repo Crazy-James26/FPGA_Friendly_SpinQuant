@@ -288,9 +288,9 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
     vector<float, tapa::aligned_allocator<float>> gamma_beta_mmap_0(DECODER_LAYER_NUM * HIDDEN_DIM);
     vector<float, tapa::aligned_allocator<float>> gamma_beta_mmap_1(DECODER_LAYER_NUM * HIDDEN_DIM);
 
-    // Residual cache
-    vector<hls::vector<float, TOKEN_PARALLEL>, tapa::aligned_allocator<hls::vector<float, TOKEN_PARALLEL>>> res0_cache_mmap(MAX_PRE_SEQ_LEN/TOKEN_PARALLEL * HIDDEN_DIM);
-    vector<hls::vector<float, TOKEN_PARALLEL>, tapa::aligned_allocator<hls::vector<float, TOKEN_PARALLEL>>> res1_cache_mmap(MAX_PRE_SEQ_LEN/TOKEN_PARALLEL * HIDDEN_DIM);
+    // // Residual cache
+    // vector<hls::vector<float, TOKEN_PARALLEL>, tapa::aligned_allocator<hls::vector<float, TOKEN_PARALLEL>>> res0_cache_mmap(MAX_PRE_SEQ_LEN/TOKEN_PARALLEL * HIDDEN_DIM);
+    // vector<hls::vector<float, TOKEN_PARALLEL>, tapa::aligned_allocator<hls::vector<float, TOKEN_PARALLEL>>> res1_cache_mmap(MAX_PRE_SEQ_LEN/TOKEN_PARALLEL * HIDDEN_DIM);
     
     // Initialize buffers
     for(int i = 0; i < DECODER_LAYER_NUM; i++) {
@@ -356,18 +356,22 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
     #include "parameters/w_rmsnorm.h"
     
     for(int i = 0; i < DECODER_LAYER_NUM; i++) {
-        int bias = i * (KV_HIDDEN_DIM + HIDDEN_DIM);
+        int bias = i * KV_HIDDEN_DIM;
         for(int j = 0; j < KV_HIDDEN_DIM; j++){
             wk_wq_s_sum_mmap[bias + j][0] = w_k_proj_s[i][j];
             wk_wq_s_sum_mmap[bias + j][1] = w_k_proj_sum[i][j];
             wv_wo_s_sum_mmap[bias + j][0] = w_v_proj_s[i][j];
             wv_wo_s_sum_mmap[bias + j][1] = w_v_proj_sum[i][j];
         }
+    }
+
+    for(int i = 0; i < DECODER_LAYER_NUM; i++) {
+        int bias = DECODER_LAYER_NUM * KV_HIDDEN_DIM + i * HIDDEN_DIM;
         for(int j = 0; j < HIDDEN_DIM; j++){
-            wk_wq_s_sum_mmap[bias + KV_HIDDEN_DIM + j][0] = w_q_proj_s[i][j];
-            wk_wq_s_sum_mmap[bias + KV_HIDDEN_DIM + j][1] = w_q_proj_sum[i][j];
-            wv_wo_s_sum_mmap[bias + KV_HIDDEN_DIM + j][0] = w_o_proj_s[i][j];
-            wv_wo_s_sum_mmap[bias + KV_HIDDEN_DIM + j][1] = w_o_proj_sum[i][j];
+            wk_wq_s_sum_mmap[bias + j][0] = w_q_proj_s[i][j];
+            wk_wq_s_sum_mmap[bias + j][1] = w_q_proj_sum[i][j];
+            wv_wo_s_sum_mmap[bias + j][0] = w_o_proj_s[i][j];
+            wv_wo_s_sum_mmap[bias + j][1] = w_o_proj_sum[i][j];
         }
     }
 
@@ -422,7 +426,7 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
 
     // Input/Output mmap
     static vector<hls::vector<float, T_BLOCK_PARALLEL>, tapa::aligned_allocator<hls::vector<float, T_BLOCK_PARALLEL>>> dec_io_mmap(
-        (MAX_DEC_SEQ_LEN * (DECODER_LAYER_NUM + 1) + 1) * HIDDEN_DIM / T_BLOCK_PARALLEL
+        MAX_DEC_SEQ_LEN * (DECODER_LAYER_NUM + 1) * HIDDEN_DIM / T_BLOCK_PARALLEL
     );
     cout << "io_mmap size: " << dec_io_mmap.size() << endl;
 
@@ -550,12 +554,15 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
 
     // initFloatVec(w_s_sum_qkvo_FFN_mmap, 2);
     for(int i = 0; i < DECODER_LAYER_NUM; i++) {
-        int bias = w_s_kv_addr_bias + i * KV_HIDDEN_DIM_PAD;
-        for(int j = 0; j < KV_HIDDEN_DIM; j++){
-            w_s_sum_qkvo_FFN_mmap[bias + j][0] = w_k_proj_s[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + j][1] = w_k_proj_sum[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + KV_HIDDEN_DIM + j][0] = w_v_proj_s[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + KV_HIDDEN_DIM + j][1] = w_v_proj_sum[i][j];
+        for(int t = 0; t < T_QKVO_FFN_BLOCK_PARALLEL; t++){
+            int bias_k = w_s_kv_addr_bias + i * KV_HIDDEN_DIM_PAD + t * KV_HIDDEN_DIM_PAD/T_QKVO_FFN_BLOCK_PARALLEL;
+            int bias_v = bias_k + KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL;
+            for(int j = 0; j < KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL; j++){
+                w_s_sum_qkvo_FFN_mmap[bias_k + j][0] = w_k_proj_s[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_k + j][1] = w_k_proj_sum[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_v + j][0] = w_v_proj_s[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_v + j][1] = w_v_proj_sum[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+            }
         }
     }
 
@@ -635,6 +642,12 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
 
         // launch prefilling kernel
         // load prompt token_idx[:-1] to prefilling's input/output buffer
+
+        // Zero out the io vectors
+        for (int idx = 0; idx < pref_io_mmap.size(); idx++) {
+            pref_io_mmap[idx] = 0.0f;
+        }
+
         std::vector<int> token_idx;
         std::ifstream fin("my_prompt_token_idx.txt");
         if (!fin) {
@@ -642,7 +655,7 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
             return;
         }
         int id;
-        while (fin >> id) {
+        while (fin >> id && token_idx.size() < MAX_PRE_SEQ_LEN) {
             token_idx.push_back(id);
         }
         std::cout << "Loaded " << token_idx.size() << " tokens:\n"; 
@@ -659,8 +672,8 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
         for (auto &vec : pref_k_cache)      for (int i = 0; i < PRE_K_PARALLEL; ++i) vec[i] = 0;
         for (auto &vec : pref_v_cache)      for (int i = 0; i < PRE_V_PARALLEL; ++i) vec[i] = 0;
 
-        for (auto &vec : res0_cache_mmap) for (int i = 0; i < TOKEN_PARALLEL; ++i) vec[i] = 0.0f;
-        for (auto &vec : res1_cache_mmap) for (int i = 0; i < TOKEN_PARALLEL; ++i) vec[i] = 0.0f;
+        // for (auto &vec : res0_cache_mmap) for (int i = 0; i < TOKEN_PARALLEL; ++i) vec[i] = 0.0f;
+        // for (auto &vec : res1_cache_mmap) for (int i = 0; i < TOKEN_PARALLEL; ++i) vec[i] = 0.0f;
 
         cout << "Prefilling kernel begins running!\n";
         int64_t pref_kernel_time_ns = tapa::invoke(
@@ -681,15 +694,20 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
             tapa::read_only_mmap<hls::vector<float, 2>>(w_ffn_down_s_sum_mmap),
             tapa::read_only_mmap<float>(gamma_beta_mmap_0),
             tapa::read_only_mmap<float>(gamma_beta_mmap_1),
-            tapa::read_write_mmap<hls::vector<float, TOKEN_PARALLEL>>(res0_cache_mmap),
-            tapa::read_write_mmap<hls::vector<float, TOKEN_PARALLEL>>(res1_cache_mmap),
-            MAX_PRE_SEQ_LEN
+            // tapa::read_write_mmap<hls::vector<float, TOKEN_PARALLEL>>(res0_cache_mmap),
+            // tapa::read_write_mmap<hls::vector<float, TOKEN_PARALLEL>>(res1_cache_mmap),
+            // MAX_PRE_SEQ_LEN
+            test_pre_seq_len_pad
         );
         
         double pref_t_s = pref_kernel_time_ns * 1e-9;
         std::cout << "  Run " << run << " — kernel time: " << pref_t_s << " s\n";
         pref_total_time_ns += pref_kernel_time_ns;
 
+        for(int i = 0; i < 32; i++) std::cout << pref_io_mmap[i][0] << " ";
+        std::cout << std::endl;
+        for(int i = 0; i < 32; i++) std::cout << pref_io_mmap[(MAX_PRE_SEQ_LEN / TOKEN_PARALLEL) * HIDDEN_DIM + i][0] << " ";
+        std::cout << std::endl;
 
         // launch decoding kernel
 
@@ -698,6 +716,10 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
             rand_seeds_mmap[i] = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
         }
         
+        // Zero out the io vectors
+        for (int idx = 0; idx < dec_io_mmap.size(); idx++) {
+            dec_io_mmap[idx] = 0.0f;
+        }
         // load the last token_idx[-1] to decoding's input/output buffer
         for (size_t idx = 0; idx < HIDDEN_DIM/T_BLOCK_PARALLEL; ++idx) {
             dec_io_mmap[idx] = vocab_lib[token_idx[token_idx.size() - 1] * (HIDDEN_DIM/T_BLOCK_PARALLEL) + idx];
@@ -763,13 +785,21 @@ void SpinQuant_Prefilling_Decoding_test(int argc, char* argv[]) {
             tapa::read_only_mmap<hls::vector<float, T_BLOCK_PARALLEL>>(gamma_beta_mmap),
             tapa::read_only_mmap<float>(rand_seeds_mmap),
             tapa::write_only_mmap<int>(sampled_token_idx_mmap),
-            MAX_PRE_SEQ_LEN,
-            MAX_DEC_SEQ_LEN
+            // MAX_PRE_SEQ_LEN,
+            test_pre_seq_len,
+            MAX_DEC_SEQ_LEN - 1
         );
             
         double dec_t_s = dec_kernel_time_ns * 1e-9;
         std::cout << "  Run " << run << " — kernel time: " << dec_t_s << " s\n";
         dec_total_time_ns += dec_kernel_time_ns;
+
+        for(int i = 0; i < 32; i++) std::cout << dec_io_mmap[i][0] << " ";
+        std::cout << std::endl;
+        for(int i = 0; i < 32; i++) std::cout << dec_io_mmap[MAX_DEC_SEQ_LEN * (HIDDEN_DIM/T_BLOCK_PARALLEL) + i][0] << " ";
+        std::cout << std::endl;
+
+
 
         char fname[256];
         std::snprintf(fname, sizeof(fname), "my_sampled_token_idx_%d.txt", run);

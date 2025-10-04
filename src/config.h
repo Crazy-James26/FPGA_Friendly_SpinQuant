@@ -40,12 +40,21 @@ using namespace std;
 
 #define INTER_DIM 8192
 #define log2_INTER_DIM 13
+#define sqrt_INTER_DIM 90.50966799
 
 #define VOCAB_SIZE 128256
 
 // U280
 // Prefilling config
-// //small config
+// // //test config
+// constexpr int  TOKEN_PARALLEL = 2;
+// constexpr int  PRE_QKVO_W_PARALLEL = 8;
+// constexpr int  PRE_K_PARALLEL = 8;
+// constexpr int  PRE_V_PARALLEL = 8;
+// constexpr int  PRE_FFN_W_PARALLEL = 32;
+// constexpr int  PRE_FFN_W_BLOCK_NUM = 2;
+
+// // //small config
 // constexpr int  TOKEN_PARALLEL = 8;
 // constexpr int  PRE_QKVO_W_PARALLEL = 16;
 // constexpr int  PRE_K_PARALLEL = 16;
@@ -62,10 +71,15 @@ constexpr int  PRE_FFN_W_PARALLEL = 96;
 constexpr int  PRE_FFN_W_BLOCK_NUM = 3;
 
 
-// // Decoding config
+// // // Decoding config
 // constexpr int  T_BLOCK_PARALLEL = 4;
 // constexpr int  T_QKVO_FFN_BLOCK_PARALLEL = 8;
 // constexpr int  DEC_HEAD_PARALLEL = 4;
+
+// // // test config
+// // constexpr int  DEC_QKVO_FFN_W_PARALLEL = 16;
+// // constexpr int  DEC_K_PARALLEL = 8;
+// // constexpr int  DEC_V_PARALLEL = 8;
 
 // // small config
 // constexpr int  DEC_QKVO_FFN_W_PARALLEL = 64;
@@ -82,7 +96,7 @@ constexpr int  T_BLOCK_PARALLEL = 4;
 constexpr int  T_QKVO_FFN_BLOCK_PARALLEL = 16;
 constexpr int  DEC_HEAD_PARALLEL = (T_QKVO_FFN_BLOCK_PARALLEL/2);
 
-// // small config
+// // // small config
 // constexpr int  DEC_QKVO_FFN_W_PARALLEL = 32;
 // constexpr int  DEC_K_PARALLEL = (DEC_QKVO_FFN_W_PARALLEL/2);
 // constexpr int  DEC_V_PARALLEL = (DEC_QKVO_FFN_W_PARALLEL/2);
@@ -95,7 +109,7 @@ constexpr int  DEC_V_PARALLEL = (DEC_QKVO_FFN_W_PARALLEL/2);
 
 // // // // V80
 // // // Prefilling config
-// // constexpr int  TOKEN_PARALLEL = 8;
+// // constexpr int  TOKEN_PARALLEL = 16;
 // // constexpr int  PRE_QKVO_W_PARALLEL = 32;
 // // constexpr int  PRE_K_PARALLEL = 32;
 // // constexpr int  PRE_V_PARALLEL = 32;
@@ -115,9 +129,9 @@ constexpr int  DEC_V_PARALLEL = (DEC_QKVO_FFN_W_PARALLEL/2);
 
 
 // //toy test
-// #define DECODER_LAYER_NUM 2
-// #define MAX_PRE_SEQ_LEN 64
-// #define MAX_DEC_SEQ_LEN 64
+// #define DECODER_LAYER_NUM 1
+// #define MAX_PRE_SEQ_LEN 32
+// #define MAX_DEC_SEQ_LEN 32
 // #define MAX_SUM_SEQ_LEN (MAX_PRE_SEQ_LEN + MAX_DEC_SEQ_LEN)
 // #define log2_MAX_PRE_SEQ_LEN 6
 // #define log2_MAX_SUM_SEQ_LEN 7
@@ -137,8 +151,9 @@ constexpr int  DEC_V_PARALLEL = (DEC_QKVO_FFN_W_PARALLEL/2);
 // #define ATTN_GROUP_NUM (HIDDEN_DIM/KV_HIDDEN_DIM)
 
 
-// #define INTER_DIM 2048
-// #define log2_INTER_DIM 11
+// #define INTER_DIM 1024
+// #define log2_INTER_DIM 10
+// #define sqrt_INTER_DIM 32
 
 // #define VOCAB_SIZE 3800
 

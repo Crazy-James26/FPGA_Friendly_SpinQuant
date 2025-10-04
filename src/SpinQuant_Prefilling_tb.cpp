@@ -50,6 +50,7 @@ void prefilling_read_int4_bin_as_int8_weight_mmap(
         fin.seekg(off1, std::ios::beg);
         fin.read(reinterpret_cast<char*>(data_1.data()), data_1.size() * sizeof(int8_t));
         if (!fin) { std::cerr << "Read error @ row " << (2*n+1) << " in " << name << "\n"; return; }
+        
 
         
         // Pack and write to mmap
@@ -77,9 +78,10 @@ void prefilling_read_embedding_from_bin(
     const std::string& binfile_name,
     std::vector<int> token_idx,
     std::vector<hls::vector<float, token_parallel>, tapa::aligned_allocator<hls::vector<float, token_parallel>>>& embed_mmap,
-    int mmap_offset
+    int mmap_offset,
+    bool read_last_one = true
 ) {
-    int token_num = token_idx.size();
+    int token_num = read_last_one ? token_idx.size() : token_idx.size() - 1;
     if (token_num > max_seq_len) {
         token_num = max_seq_len;
         cout << "Warning: token_num exceeds max_seq_len, truncated to " << max_seq_len << "\n";
@@ -164,9 +166,9 @@ void SpinQuant_Prefilling_test(int argc, char* argv[]) {
     vector<float, tapa::aligned_allocator<float>> gamma_beta_mmap_0(DECODER_LAYER_NUM * HIDDEN_DIM);
     vector<float, tapa::aligned_allocator<float>> gamma_beta_mmap_1(DECODER_LAYER_NUM * HIDDEN_DIM);
 
-    // Residual cache
-    vector<hls::vector<float, TOKEN_PARALLEL>, tapa::aligned_allocator<hls::vector<float, TOKEN_PARALLEL>>> res0_cache_mmap(MAX_PRE_SEQ_LEN/TOKEN_PARALLEL * HIDDEN_DIM);
-    vector<hls::vector<float, TOKEN_PARALLEL>, tapa::aligned_allocator<hls::vector<float, TOKEN_PARALLEL>>> res1_cache_mmap(MAX_PRE_SEQ_LEN/TOKEN_PARALLEL * HIDDEN_DIM);
+    // // Residual cache
+    // vector<hls::vector<float, TOKEN_PARALLEL>, tapa::aligned_allocator<hls::vector<float, TOKEN_PARALLEL>>> res0_cache_mmap(MAX_PRE_SEQ_LEN/TOKEN_PARALLEL * HIDDEN_DIM);
+    // vector<hls::vector<float, TOKEN_PARALLEL>, tapa::aligned_allocator<hls::vector<float, TOKEN_PARALLEL>>> res1_cache_mmap(MAX_PRE_SEQ_LEN/TOKEN_PARALLEL * HIDDEN_DIM);
     
     // 2) Initialize buffers with random data
     std::mt19937 rng(1234);
@@ -271,18 +273,22 @@ void SpinQuant_Prefilling_test(int argc, char* argv[]) {
     #include "parameters/w_rmsnorm.h"
     
     for(int i = 0; i < DECODER_LAYER_NUM; i++) {
-        int bias = i * (KV_HIDDEN_DIM + HIDDEN_DIM);
+        int bias = i * KV_HIDDEN_DIM;
         for(int j = 0; j < KV_HIDDEN_DIM; j++){
             wk_wq_s_sum_mmap[bias + j][0] = w_k_proj_s[i][j];
             wk_wq_s_sum_mmap[bias + j][1] = w_k_proj_sum[i][j];
             wv_wo_s_sum_mmap[bias + j][0] = w_v_proj_s[i][j];
             wv_wo_s_sum_mmap[bias + j][1] = w_v_proj_sum[i][j];
         }
+    }
+
+    for(int i = 0; i < DECODER_LAYER_NUM; i++) {
+        int bias = DECODER_LAYER_NUM * KV_HIDDEN_DIM + i * HIDDEN_DIM;
         for(int j = 0; j < HIDDEN_DIM; j++){
-            wk_wq_s_sum_mmap[bias + KV_HIDDEN_DIM + j][0] = w_q_proj_s[i][j];
-            wk_wq_s_sum_mmap[bias + KV_HIDDEN_DIM + j][1] = w_q_proj_sum[i][j];
-            wv_wo_s_sum_mmap[bias + KV_HIDDEN_DIM + j][0] = w_o_proj_s[i][j];
-            wv_wo_s_sum_mmap[bias + KV_HIDDEN_DIM + j][1] = w_o_proj_sum[i][j];
+            wk_wq_s_sum_mmap[bias + j][0] = w_q_proj_s[i][j];
+            wk_wq_s_sum_mmap[bias + j][1] = w_q_proj_sum[i][j];
+            wv_wo_s_sum_mmap[bias + j][0] = w_o_proj_s[i][j];
+            wv_wo_s_sum_mmap[bias + j][1] = w_o_proj_sum[i][j];
         }
     }
 
@@ -330,13 +336,12 @@ void SpinQuant_Prefilling_test(int argc, char* argv[]) {
         //         io_mmap[idx][j] = distF(rng);
         //     }
         // }
-        // // Zero out the remaining vectors
-        // for (size_t idx = io_init_vecs; idx < io_mmap.size(); ++idx) {
-        //     for (int j = 0; j < TOKEN_PARALLEL; ++j) {
-        //         io_mmap[idx][j] = 0.0f;
-        //     }
-        // }
-
+        
+        // Zero out the remaining vectors
+        for (size_t idx = io_init_vecs; idx < io_mmap.size(); ++idx) {
+            io_mmap[idx] = 0.0f;
+        }
+        
         std::vector<int> token_idx;
         std::ifstream fin("my_prompt_token_idx.txt");
         if (!fin) {
@@ -344,7 +349,7 @@ void SpinQuant_Prefilling_test(int argc, char* argv[]) {
             return;
         }
         int id;
-        while (fin >> id) {
+        while (fin >> id && token_idx.size() < MAX_PRE_SEQ_LEN)  {
             token_idx.push_back(id);
         }
         std::cout << "Loaded " << token_idx.size() << " tokens:\n";
@@ -353,11 +358,17 @@ void SpinQuant_Prefilling_test(int argc, char* argv[]) {
         prefilling_read_embedding_from_bin<TOKEN_PARALLEL, HIDDEN_DIM>("model_embed_tokens_fp32", token_idx, io_mmap, 0);
         cout << "Prefilling: Finished reading input embedding." << endl;
 
+        // for(int idx = 0; idx < MAX_PRE_SEQ_LEN/TOKEN_PARALLEL; idx++) {
+        //     for(int k = 0; k < HIDDEN_DIM; k++){
+        //         io_mmap[idx * HIDDEN_DIM + k] = (k + 1) * 0.001f - 1.5;
+        //     }
+        // }
+
         for (auto &vec : k_cache)      for (int i = 0; i < PRE_K_PARALLEL; ++i) vec[i] = 0;
         for (auto &vec : v_cache)      for (int i = 0; i < PRE_V_PARALLEL; ++i) vec[i] = 0;
 
-        for (auto &vec : res0_cache_mmap) for (int i = 0; i < TOKEN_PARALLEL; ++i) vec[i] = 0.0f;
-        for (auto &vec : res1_cache_mmap) for (int i = 0; i < TOKEN_PARALLEL; ++i) vec[i] = 0.0f;
+        // for (auto &vec : res0_cache_mmap) for (int i = 0; i < TOKEN_PARALLEL; ++i) vec[i] = 0.0f;
+        // for (auto &vec : res1_cache_mmap) for (int i = 0; i < TOKEN_PARALLEL; ++i) vec[i] = 0.0f;
 
         cout << "kernel begins running!\n";
         int64_t kernel_time_ns = tapa::invoke(
@@ -378,8 +389,8 @@ void SpinQuant_Prefilling_test(int argc, char* argv[]) {
             tapa::read_only_mmap<hls::vector<float, 2>>(w_ffn_down_s_sum_mmap),
             tapa::read_only_mmap<float>(gamma_beta_mmap_0),
             tapa::read_only_mmap<float>(gamma_beta_mmap_1),
-            tapa::read_write_mmap<hls::vector<float, TOKEN_PARALLEL>>(res0_cache_mmap),
-            tapa::read_write_mmap<hls::vector<float, TOKEN_PARALLEL>>(res1_cache_mmap),
+            // tapa::read_write_mmap<hls::vector<float, TOKEN_PARALLEL>>(res0_cache_mmap),
+            // tapa::read_write_mmap<hls::vector<float, TOKEN_PARALLEL>>(res1_cache_mmap),
             MAX_PRE_SEQ_LEN
         );
 

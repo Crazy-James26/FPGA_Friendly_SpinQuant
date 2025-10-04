@@ -43,7 +43,7 @@ void MHA_test(int argc, char* argv[]) {
                 float scale = Q_s[layer][h];
 
                 for (int j = 0; j < HEAD_DIM; j++) {
-                    int qval = std::round(pref_q_gold[layer][i][h * HEAD_DIM + j] / scale);
+                    int qval = std::round(pref_q_gold[layer][i][h * HEAD_DIM + j]/sqrt_HEAD_DIM / scale);
                     qval = std::max(-128, std::min(127, qval));
                     pref_q_gold[layer][i][h * HEAD_DIM + j] = qval * scale;
                 }
@@ -138,7 +138,8 @@ void MHA_test(int argc, char* argv[]) {
             for (int h = 0; h < Q_HEAD_NUM; h++) {
                 //scale
                 for (int j = 0; j < MAX_PRE_SEQ_LEN; j++) {
-                    pref_a_gold[layer][h][i][j] /= sqrt_HEAD_DIM;  // Scale by sqrt(HEAD_DIM)
+                    if(j > i) 
+                        pref_a_gold[layer][h][i][j] = -1e9;
                 }
 
                 //softmax
@@ -162,7 +163,7 @@ void MHA_test(int argc, char* argv[]) {
 
                 for (int j = 0; j < MAX_PRE_SEQ_LEN; j++) {
                     int qval = std::round(pref_a_gold[layer][h][i][j] / scale);
-                    qval = std::max(-128, std::min(127, qval));
+                    qval = std::min(255, qval);
                     pref_a_gold[layer][h][i][j] = qval * scale;
                 }
             }
@@ -306,7 +307,7 @@ void MHA_test(int argc, char* argv[]) {
                 float scale = Q_s[layer][h];
 
                 for (int j = 0; j < HEAD_DIM; j++) {
-                    int qval = std::round(dec_q_gold[i][layer][h * HEAD_DIM + j] / scale);
+                    int qval = std::round(dec_q_gold[i][layer][h * HEAD_DIM + j]/sqrt_HEAD_DIM / scale);
                     qval = std::max(-128, std::min(127, qval));
                     dec_q_gold[i][layer][h * HEAD_DIM + j] = qval * scale;
                 }
@@ -357,7 +358,7 @@ void MHA_test(int argc, char* argv[]) {
                     int q_h = h * ATTN_GROUP_NUM + g;
                     for(int j = 0; j < MAX_SUM_SEQ_LEN; j++) {
                         dec_a_gold[i][layer][q_h][j] = 0;
-                        if(j < MAX_PRE_SEQ_LEN + i){
+                        if(j <= MAX_PRE_SEQ_LEN + i){
                             for(int k = 0; k < HEAD_DIM; k++){
                                 dec_a_gold[i][layer][q_h][j] += dec_q_gold[i][layer][q_h * HEAD_DIM + k] * dec_k_gold[j][layer][h * HEAD_DIM + k];
                             }
@@ -386,7 +387,7 @@ void MHA_test(int argc, char* argv[]) {
     for(int i = 0; i < MAX_DEC_SEQ_LEN; i++) {
         for(int layer = 0; layer < DECODER_LAYER_NUM; layer++){
             for(int h = 0; h < Q_HEAD_NUM; h++) {
-                for(int j = 0; j < MAX_PRE_SEQ_LEN + i; j++) {
+                for(int j = 0; j <= MAX_PRE_SEQ_LEN + i; j++) {
                     int idx = ((i * DECODER_LAYER_NUM + layer) * Q_HEAD_NUM/DEC_HEAD_PARALLEL + h % (Q_HEAD_NUM/DEC_HEAD_PARALLEL)) * MAX_SUM_SEQ_LEN + j;
                     int sub_idx = h / (Q_HEAD_NUM/DEC_HEAD_PARALLEL);
                     float actual = dec_a_mmap[idx][sub_idx];
@@ -415,33 +416,28 @@ void MHA_test(int argc, char* argv[]) {
     for (int i = 0; i < MAX_DEC_SEQ_LEN; i++) {
         for(int layer = 0; layer < DECODER_LAYER_NUM; layer++){
             for (int h = 0; h < Q_HEAD_NUM; h++) {
-                //scale
-                for (int j = 0; j < MAX_PRE_SEQ_LEN + i; j++) {
-                    dec_a_gold[i][layer][h][j] /= sqrt_HEAD_DIM;  // Scale by sqrt(HEAD_DIM)
-                }
-
                 //softmax
                 float attn_exp[MAX_SUM_SEQ_LEN];
                 float attn_exp_sum = 0;
-                for (int j = 0; j < MAX_PRE_SEQ_LEN + i; j++) {
+                for (int j = 0; j <= MAX_PRE_SEQ_LEN + i; j++) {
                     attn_exp[j] = exp(dec_a_gold[i][layer][h][j]);
                     attn_exp_sum += attn_exp[j];
                 }
 
-                for (int j = 0; j < MAX_PRE_SEQ_LEN + i; j++) {
+                for (int j = 0; j <= MAX_PRE_SEQ_LEN + i; j++) {
                     dec_a_gold[i][layer][h][j] = attn_exp[j] / attn_exp_sum;
                 }
 
                 // fake_quantize symmetrically per output channel (row)
-                for (int j = 0; j < MAX_PRE_SEQ_LEN + i; j++) {
+                for (int j = 0; j <= MAX_PRE_SEQ_LEN + i; j++) {
                     float val = dec_a_gold[i][layer][h][j];
                 }
 
                 float scale = A_s[layer][h];
 
-                for (int j = 0; j < MAX_PRE_SEQ_LEN + i; j++) {
+                for (int j = 0; j <= MAX_PRE_SEQ_LEN + i; j++) {
                     int qval = std::round(dec_a_gold[i][layer][h][j] / scale);
-                    qval = std::max(-128, std::min(127, qval));
+                    qval = std::min(255, qval);
                     dec_a_gold[i][layer][h][j] = qval * scale;
                 }
             }
@@ -501,7 +497,7 @@ void MHA_test(int argc, char* argv[]) {
                     int q_h = h * ATTN_GROUP_NUM + g;
                     for(int j = 0; j < HEAD_DIM; j++) {
                         dec_o_gold[i][layer][q_h * HEAD_DIM + j] = 0;
-                        for(int k = 0; k < MAX_PRE_SEQ_LEN + i; k++){
+                        for(int k = 0; k <= MAX_PRE_SEQ_LEN + i; k++){
                             dec_o_gold[i][layer][q_h * HEAD_DIM + j] += dec_a_gold[i][layer][q_h][k] * dec_v_gold[k][layer][h * HEAD_DIM + j];
                         }
                     }

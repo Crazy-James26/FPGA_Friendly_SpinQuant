@@ -43,7 +43,7 @@ void pref_MHA_test(int argc, char* argv[]) {
                 float scale = Q_s[layer][h];
 
                 for (int j = 0; j < HEAD_DIM; j++) {
-                    int qval = std::round(q_gold[layer][i][h * HEAD_DIM + j] / scale);
+                    int qval = std::round(q_gold[layer][i][h * HEAD_DIM + j]/sqrt_HEAD_DIM / scale);
                     qval = std::max(-128, std::min(127, qval));
                     q_gold[layer][i][h * HEAD_DIM + j] = qval * scale;
                 }
@@ -138,7 +138,8 @@ void pref_MHA_test(int argc, char* argv[]) {
             for (int h = 0; h < Q_HEAD_NUM; h++) {
                 //scale
                 for (int j = 0; j < MAX_PRE_SEQ_LEN; j++) {
-                    a_gold[layer][h][i][j] /= sqrt_HEAD_DIM;  // Scale by sqrt(HEAD_DIM)
+                    if(j > i) 
+                        a_gold[layer][h][i][j] = -1e38;
                 }
 
                 //softmax
@@ -153,16 +154,11 @@ void pref_MHA_test(int argc, char* argv[]) {
                     a_gold[layer][h][i][j] = attn_exp[j] / attn_exp_sum;
                 }
 
-                // fake_quantize symmetrically per output channel (row)
-                for (int j = 0; j < MAX_PRE_SEQ_LEN; j++) {
-                    float val = a_gold[layer][h][i][j];
-                }
-
                 float scale = A_s[layer][h];
 
                 for (int j = 0; j < MAX_PRE_SEQ_LEN; j++) {
                     int qval = std::round(a_gold[layer][h][i][j] / scale);
-                    qval = std::max(-128, std::min(127, qval));
+                    qval = std::min(255, qval);
                     a_gold[layer][h][i][j] = qval * scale;
                 }
             }
@@ -219,7 +215,7 @@ void pref_MHA_test(int argc, char* argv[]) {
                     }
                 }
             }
-        }   
+        }
     }
     
     cout << "kernel begins running!\n";

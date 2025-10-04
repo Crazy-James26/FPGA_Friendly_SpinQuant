@@ -110,7 +110,7 @@ void pref_K_cache_manager_template(
 
 
 
-template <int block_size_a, int block_size_b, int max_log2_k_size = log2_HIDDEN_DIM>
+template <int block_size_a, int block_size_b, int max_log2_k_size = log2_HIDDEN_DIM, bool is_uint_A = false>
 void systolic_array_i8xi8_pack_2x2(
     hls::stream<hls::vector<ap_int<8>, block_size_a>>& A_loader,
     hls::stream<hls::vector<ap_int<8>, block_size_b>>& B_loader, 
@@ -149,13 +149,13 @@ void systolic_array_i8xi8_pack_2x2(
         for (int n = 0; n < block_size_b/2; n++) {
         #pragma HLS UNROLL
             if(m == block_size_a/2 - 1 && n == block_size_b/2 - 1)
-                PE_i8xi8_pack_2x2_2xDSP_2D<max_log2_k_size, true, true>(A_fifo[m][n], A_fifo[m][n+1], B_fifo[n][m], B_fifo[n][m+1], C_fifo[m][n], k_size);
+                PE_i8xi8_pack_2x2_2xDSP_2D<is_uint_A, max_log2_k_size, true, true>(A_fifo[m][n], A_fifo[m][n+1], B_fifo[n][m], B_fifo[n][m+1], C_fifo[m][n], k_size);
             else if(m == block_size_a/2 - 1)
-                PE_i8xi8_pack_2x2_2xDSP_2D<max_log2_k_size, false, true>(A_fifo[m][n], A_fifo[m][n+1], B_fifo[n][m], B_fifo[n][m+1], C_fifo[m][n], k_size);
+                PE_i8xi8_pack_2x2_2xDSP_2D<is_uint_A, max_log2_k_size, false, true>(A_fifo[m][n], A_fifo[m][n+1], B_fifo[n][m], B_fifo[n][m+1], C_fifo[m][n], k_size);
             else if(n == block_size_b/2 - 1)
-                PE_i8xi8_pack_2x2_2xDSP_2D<max_log2_k_size, true, false>(A_fifo[m][n], A_fifo[m][n+1], B_fifo[n][m], B_fifo[n][m+1], C_fifo[m][n], k_size);
+                PE_i8xi8_pack_2x2_2xDSP_2D<is_uint_A, max_log2_k_size, true, false>(A_fifo[m][n], A_fifo[m][n+1], B_fifo[n][m], B_fifo[n][m+1], C_fifo[m][n], k_size);
             else
-                PE_i8xi8_pack_2x2_2xDSP_2D<max_log2_k_size, false, false>(A_fifo[m][n], A_fifo[m][n+1], B_fifo[n][m], B_fifo[n][m+1], C_fifo[m][n], k_size);
+                PE_i8xi8_pack_2x2_2xDSP_2D<is_uint_A, max_log2_k_size, false, false>(A_fifo[m][n], A_fifo[m][n+1], B_fifo[n][m], B_fifo[n][m+1], C_fifo[m][n], k_size);
         }
     }
   
@@ -186,14 +186,15 @@ void systolic_array_i8xi8_pack_2x2(
     }
 }
 
-template <int io_parallel, int K_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int log2_mha_head_dim = log2_HEAD_DIM, int max_seq_len = MAX_PRE_SEQ_LEN>
+template <int io_parallel, int K_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int log2_mha_head_dim = log2_HEAD_DIM, int max_seq_len = MAX_PRE_SEQ_LEN, bool is_uint_input=false>
 void pref_MHA_i8xi8_qxk_template(
     tapa::istream<hls::vector<ap_int<8>, io_parallel>>& input_seq,
     tapa::istream<hls::vector<ap_int<8>, K_parallel>>& weight_loader,
     tapa::ostream<hls::vector<ap_int<log2_mha_head_dim + 16>, io_parallel>>& output_seq,
     int seq_len = max_seq_len
 ){
-    hls::vector<ap_int<8>, io_parallel> A[mha_head_num * mha_head_dim];
+    // hls::vector<ap_int<8>, io_parallel> A[mha_head_num * mha_head_dim];
+    hls::vector<ap_int<8>, io_parallel> A[mha_head_dim];
 
     hls::stream<hls::vector<ap_int<8>, io_parallel>> block_A_loader;
     #pragma HLS BIND_STORAGE variable=block_A_loader type=fifo impl=srl
@@ -206,22 +207,28 @@ void pref_MHA_i8xi8_qxk_template(
 
     io_block_loop: for (int M = 0; M < seq_len/io_parallel; M++){
     #pragma HLS loop_tripcount min=1 max=max_seq_len/io_parallel
-        in_buf_loop: for (int k = 0; k < mha_head_num * mha_head_dim; k++) {    // L19
-        #pragma HLS pipeline II=1
-            A[k] = input_seq.read();
-        }
+        // in_buf_loop: for (int k = 0; k < mha_head_num * mha_head_dim; k++) {    // L19
+        // #pragma HLS pipeline II=1
+        //     A[k] = input_seq.read();
+        // }
 
         attn_head_loop: for (int H = 0; H < mha_head_num; H++){
+            in_buf_loop: for (int k = 0; k < mha_head_dim; k++) {    // L19
+            #pragma HLS pipeline II=1
+                A[k] = input_seq.read();
+            }
+
             k_weight_block_loop: for(int N = 0; N < seq_len/K_parallel; N++){
             #pragma HLS loop_tripcount min=1 max=max_seq_len/K_parallel
             #pragma HLS DATAFLOW
                 init_block_AB: for(int k = 0; k < mha_head_dim; k++){
                 #pragma HLS PIPELINE II=1
-                    block_A_loader.write(A[H * mha_head_dim + k]);
+                    // block_A_loader.write(A[H * mha_head_dim + k]);
+                    block_A_loader.write(A[k]);
                     block_B_loader.write(weight_loader.read());
                 }
 
-                systolic_array_i8xi8_pack_2x2<io_parallel, K_parallel, log2_mha_head_dim>(
+                systolic_array_i8xi8_pack_2x2<io_parallel, K_parallel, log2_mha_head_dim, is_uint_input>(
                     block_A_loader, block_B_loader, block_C_drainer, mha_head_dim
                 );
 
@@ -234,6 +241,37 @@ void pref_MHA_i8xi8_qxk_template(
         }
     }
 }
+
+
+template <typename T, int io_parallel, int max_hidden_dim=HIDDEN_DIM, int max_seq_len=MAX_PRE_SEQ_LEN, int head_num=1>
+void pref_causal_mask_template(
+    tapa::istream<hls::vector<T, io_parallel>>& input_stream,
+    tapa::ostream<hls::vector<T, io_parallel>>& output_stream,
+    int seq_len = max_seq_len,
+    int io_hidden_dim = max_hidden_dim
+){
+    io_block_loop: for (int M = 0; M < seq_len/io_parallel; M++){
+        #pragma HLS loop_tripcount min=1 max=max_seq_len/io_parallel
+        attn_head_loop: for (int H = 0; H < head_num; H++){
+            mask_loop: for (int k = 0; k < io_hidden_dim; k++) {
+            #pragma HLS loop_tripcount min=1 max=max_hidden_dim
+            #pragma HLS pipeline II=1
+                hls::vector<T, io_parallel> input_pack = input_stream.read();
+                hls::vector<T, io_parallel> output_pack;
+                for(int i = 0; i < io_parallel; i++){
+                    if(k <= M * io_parallel + i){
+                        output_pack[i] = input_pack[i];
+                    }
+                    else {
+                        output_pack[i] = -1e32;
+                    }
+                }
+                output_stream.write(output_pack);
+            }
+        }
+    }
+}
+
 
 
 template <typename T, int V_s_parallel, int V_hidden_dim>
@@ -298,7 +336,7 @@ void pref_V_cache_manager_template(
 }
 
 
-template <int io_parallel, int V_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int max_seq_len = MAX_PRE_SEQ_LEN, int log2_max_seq_len = log2_MAX_PRE_SEQ_LEN>
+template <int io_parallel, int V_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int max_seq_len = MAX_PRE_SEQ_LEN, int log2_max_seq_len = log2_MAX_PRE_SEQ_LEN, bool is_uint_input=false>
 void pref_MHA_i8xi8_axv_template(
     tapa::istream<hls::vector<ap_int<8>, io_parallel>>& input_seq,
     tapa::istream<hls::vector<ap_int<8>, V_parallel>>& weight_loader,
@@ -336,7 +374,7 @@ void pref_MHA_i8xi8_axv_template(
                     block_B_loader.write(weight_loader.read());
                 }
 
-                systolic_array_i8xi8_pack_2x2<io_parallel, V_parallel, log2_max_seq_len>(
+                systolic_array_i8xi8_pack_2x2<io_parallel, V_parallel, log2_max_seq_len, is_uint_input>(
                     block_A_loader, block_B_loader, block_C_drainer, seq_len
                 );
 
@@ -371,7 +409,7 @@ void dec_K_s_cache_manager_template(
     o_k_s_head_loop: for (int H = 0; H < K_head_num/head_parallel; H++){
         attn_group_loop: for (int G = 0; G < group_num; G++){
             int bias = addr_bias + (block_id * K_head_num/head_parallel + H) * max_sum_seq_len;
-            read_k_s_loop: for(int i = 0; i < seq_id; i++){
+            read_k_s_loop: for(int i = 0; i <= seq_id; i++){
             #pragma HLS pipeline II=1
                 output_k_s_stream.write(k_s_cache[bias + i]);
             }
@@ -398,7 +436,7 @@ void dec_K_s_cache_manager_static_template(
     o_k_s_head_loop: for (int H = 0; H < K_head_num/head_parallel; H++){
         attn_group_loop: for (int G = 0; G < group_num; G++){
             int bias = addr_bias + (block_id * K_head_num/head_parallel + H) * max_sum_seq_len;
-            read_k_s_loop: for(int i = 0; i < seq_id; i++){
+            read_k_s_loop: for(int i = 0; i <= seq_id; i++){
             #pragma HLS pipeline II=1
                 output_k_s_stream.write(k_s_cache[bias + i]);
             }
@@ -462,12 +500,12 @@ void dec_K_cache_manager_template(
     printf("Sum_seq_id %d: Block_id %d: K_cache_manager storing completed.\n", seq_id, block_id);
     
 
-    int seq_block_id = (seq_id + K_parallel - 1) / K_parallel;
+    int seq_block_id = seq_id / K_parallel;
     // read k
     o_k_head_loop: for (int H = 0; H < K_head_num/head_parallel; H++){
         attn_group_loop: for (int G = 0; G < group_num; G++){
             int bias = addr_bias + (block_id * K_head_num/head_parallel + H) * max_sum_seq_len/K_parallel * K_head_dim;
-            read_k_head_loop: for(int i = 0; i < seq_block_id * K_head_dim; i++){
+            read_k_head_loop: for(int i = 0; i < (seq_block_id + 1) * K_head_dim; i++){
             #pragma HLS pipeline II=1
                 output_k_stream.write(k_cache[bias + i]);
             }
@@ -479,7 +517,7 @@ void dec_K_cache_manager_template(
 
 
 
-template <int block_size_b, int max_log2_k_size = log2_HIDDEN_DIM>
+template <int block_size_b, int max_log2_k_size = log2_HIDDEN_DIM, bool is_uint_A = false>
 void systolic_array_i8xi8_pack_1x2_1D(
     hls::stream<ap_int<8>>& A_loader,
     hls::stream<hls::vector<ap_int<8>, block_size_b>>& B_loader, 
@@ -515,9 +553,9 @@ void systolic_array_i8xi8_pack_1x2_1D(
     for (int n = 0; n < block_size_b/2; n++) {
     #pragma HLS UNROLL
         if(n == block_size_b/2 - 1)
-            PE_i8xi8_pack_1x2_1xDSP_1D<max_log2_k_size, true>(A_fifo[n], A_fifo[n+1], B_fifo[n], C_fifo[n], k_size);
+            PE_i8xi8_pack_1x2_1xDSP_1D<is_uint_A, max_log2_k_size, true>(A_fifo[n], A_fifo[n+1], B_fifo[n], C_fifo[n], k_size);
         else
-            PE_i8xi8_pack_1x2_1xDSP_1D<max_log2_k_size>(A_fifo[n], A_fifo[n+1], B_fifo[n], C_fifo[n], k_size);
+            PE_i8xi8_pack_1x2_1xDSP_1D<is_uint_A, max_log2_k_size>(A_fifo[n], A_fifo[n+1], B_fifo[n], C_fifo[n], k_size);
     }
     
   
@@ -530,12 +568,12 @@ void systolic_array_i8xi8_pack_1x2_1D(
 
 
 
-template <int head_parallel, int K_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int log2_mha_head_dim = log2_HEAD_DIM, int max_sum_seq_len=MAX_SUM_SEQ_LEN>
+template <int head_parallel, int K_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int log2_mha_head_dim = log2_HEAD_DIM, int max_sum_seq_len=MAX_SUM_SEQ_LEN, bool is_uint_input=false>
 void dec_MHA_i8xi8_qxk_template(
     tapa::istream<hls::vector<ap_int<8>, head_parallel>>& input_seq,
     tapa::istreams<hls::vector<ap_int<8>, K_parallel>, head_parallel>& weight_loaders,
     tapa::ostream<hls::vector<ap_int<log2_mha_head_dim + 16>, head_parallel>>& output_seq,
-    int seq_id
+    int seq_len
 ){
     hls::vector<ap_int<8>, head_parallel> A[mha_head_num/head_parallel * mha_head_dim];
 
@@ -555,7 +593,7 @@ void dec_MHA_i8xi8_qxk_template(
     }
 
     attn_head_loop: for (int H = 0; H < mha_head_num/head_parallel; H++){
-        k_weight_block_loop: for(int N = 0; N < (seq_id + K_parallel - 1) / K_parallel; N++){
+        k_weight_block_loop: for(int N = 0; N < (seq_len + K_parallel - 1) / K_parallel; N++){
         #pragma HLS loop_tripcount min=1 max=max_sum_seq_len/K_parallel
         #pragma HLS DATAFLOW
             init_block_AB: for(int k = 0; k < mha_head_dim; k++){
@@ -568,7 +606,7 @@ void dec_MHA_i8xi8_qxk_template(
 
             for (int i = 0; i < head_parallel; i++) {
             #pragma HLS UNROLL
-                systolic_array_i8xi8_pack_1x2_1D<K_parallel, log2_mha_head_dim>(
+                systolic_array_i8xi8_pack_1x2_1D<K_parallel, log2_mha_head_dim, is_uint_input>(
                     block_A_loader[i], block_B_loader[i], block_C_drainer[i], mha_head_dim
                 );
             }
@@ -590,14 +628,43 @@ template <typename T, int head_parallel, int K_parallel, int mha_head_num, int m
 void dec_quant_a_discard_template(
     tapa::istream<hls::vector<T, head_parallel>>& input_seq,
     tapa::ostream<hls::vector<T, head_parallel>>& output_seq,
-    int seq_id
+    int seq_len
 ){
     attn_head_loop: for (int H = 0; H < mha_head_num/head_parallel; H++){
         dec_io_discard<hls::vector<T, head_parallel>, ((max_sum_seq_len + K_parallel - 1) / K_parallel) * K_parallel, max_sum_seq_len>(
-            input_seq, output_seq, ((seq_id + K_parallel - 1) / K_parallel) * K_parallel, seq_id
+            input_seq, output_seq, ((seq_len + K_parallel - 1) / K_parallel) * K_parallel, seq_len
         );
     }
 }
+
+
+// template <typename T, int head_parallel, int max_hidden_dim=HIDDEN_DIM, int head_num=1>
+// void dec_causal_mask_template(
+//     tapa::istream<hls::vector<T, head_parallel>>& input_stream,
+//     tapa::ostream<hls::vector<T, head_parallel>>& output_stream,
+//     int io_hidden_dim,
+//     int seq_len
+// ){
+//     attn_head_loop: for (int H = 0; H < head_num/head_parallel; H++){
+//         max_loop: for (int k = 0; k < io_hidden_dim; k++) {
+//         #pragma HLS loop_tripcount min=1 max=max_hidden_dim
+//         #pragma HLS pipeline II=1
+//             hls::vector<T, head_parallel> input_pack = input_stream.read();
+//             hls::vector<T, head_parallel> output_pack;
+//             for(int i = 0; i < head_parallel; i++){
+//                 if(k < seq_len){
+//                     output_pack[i] = input_pack[i];
+//                 }
+//                 else{
+//                     output_pack[i] = -1e32;
+//                 }
+//             }
+//             output_stream.write(output_pack);
+//         }
+//     }
+// }
+        
+
 
 template <typename T, int head_parallel, int V_head_num, int V_head_dim=HEAD_DIM, int group_num=ATTN_GROUP_NUM>
 void dec_V_s_cache_manager_static_template(
@@ -681,7 +748,7 @@ void dec_V_cache_manager_template(
         attn_group_loop: for (int G = 0; G < group_num; G++){
             attn_seq_loop: for(int h_block = 0; h_block < V_head_dim/V_parallel; h_block++){
                 int bias = addr_bias + ((block_id * V_head_num/head_parallel + H) * V_head_dim/V_parallel + h_block) * max_sum_seq_len;
-                read_v_loop: for(int i = 0; i < seq_id; i++){
+                read_v_loop: for(int i = 0; i <= seq_id; i++){
                 #pragma HLS pipeline II=1
                     output_v_stream.write(v_cache[bias + i]);
                 }
@@ -693,12 +760,12 @@ void dec_V_cache_manager_template(
 }
 
 
-template <int head_parallel, int V_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int max_sum_seq_len = MAX_SUM_SEQ_LEN, int log2_max_sum_seq_len = log2_MAX_SUM_SEQ_LEN>
+template <int head_parallel, int V_parallel, int mha_head_num, int mha_head_dim = HEAD_DIM, int max_sum_seq_len = MAX_SUM_SEQ_LEN, int log2_max_sum_seq_len = log2_MAX_SUM_SEQ_LEN, bool is_uint_input=false>
 void dec_MHA_i8xi8_axv_template(
     tapa::istream<hls::vector<ap_int<8>, head_parallel>>& input_seq,
     tapa::istreams<hls::vector<ap_int<8>, V_parallel>, head_parallel>& weight_loaders,
     tapa::ostream<hls::vector<ap_int<log2_max_sum_seq_len + 16>, head_parallel>>& output_seq,
-    int seq_id
+    int seq_len
 ){
     hls::vector<ap_int<8>, head_parallel> A[max_sum_seq_len];
       
@@ -712,7 +779,7 @@ void dec_MHA_i8xi8_axv_template(
     #pragma HLS BIND_STORAGE variable=block_C_drainer type=fifo impl=srl
 
     attn_head_loop: for (int H = 0; H < mha_head_num/head_parallel; H++){
-        in_buf_loop: for (int k = 0; k < seq_id; k++) {    // L19
+        in_buf_loop: for (int k = 0; k < seq_len; k++) {    // L19
         #pragma HLS loop_tripcount min=1 max=max_sum_seq_len
         #pragma HLS pipeline II=1
             A[k] = input_seq.read();
@@ -720,7 +787,7 @@ void dec_MHA_i8xi8_axv_template(
 
         v_weight_block_loop: for(int N = 0; N < mha_head_dim/V_parallel; N++){
         #pragma HLS DATAFLOW
-            init_block_AB: for(int k = 0; k < seq_id; k++){
+            init_block_AB: for(int k = 0; k < seq_len; k++){
             #pragma HLS loop_tripcount min=1 max=max_sum_seq_len
             #pragma HLS PIPELINE II=1
                 for (int i = 0; i < head_parallel; i++) {
@@ -731,8 +798,8 @@ void dec_MHA_i8xi8_axv_template(
 
             for (int i = 0; i < head_parallel; i++) {
             #pragma HLS UNROLL
-                systolic_array_i8xi8_pack_1x2_1D<V_parallel, log2_max_sum_seq_len>(
-                    block_A_loader[i], block_B_loader[i], block_C_drainer[i], seq_id
+                systolic_array_i8xi8_pack_1x2_1D<V_parallel, log2_max_sum_seq_len, is_uint_input>(
+                    block_A_loader[i], block_B_loader[i], block_C_drainer[i], seq_len
                 );
             }
 

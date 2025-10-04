@@ -330,12 +330,15 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
 
     // initFloatVec(w_s_sum_qkvo_FFN_mmap, 2);
     for(int i = 0; i < DECODER_LAYER_NUM; i++) {
-        int bias = w_s_kv_addr_bias + i * KV_HIDDEN_DIM_PAD;
-        for(int j = 0; j < KV_HIDDEN_DIM; j++){
-            w_s_sum_qkvo_FFN_mmap[bias + j][0] = w_k_proj_s[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + j][1] = w_k_proj_sum[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + KV_HIDDEN_DIM + j][0] = w_v_proj_s[i][j];
-            w_s_sum_qkvo_FFN_mmap[bias + KV_HIDDEN_DIM + j][1] = w_v_proj_sum[i][j];
+        for(int t = 0; t < T_QKVO_FFN_BLOCK_PARALLEL; t++){
+            int bias_k = w_s_kv_addr_bias + i * KV_HIDDEN_DIM_PAD + t * KV_HIDDEN_DIM_PAD/T_QKVO_FFN_BLOCK_PARALLEL;
+            int bias_v = bias_k + KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL;
+            for(int j = 0; j < KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL; j++){
+                w_s_sum_qkvo_FFN_mmap[bias_k + j][0] = w_k_proj_s[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_k + j][1] = w_k_proj_sum[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_v + j][0] = w_v_proj_s[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+                w_s_sum_qkvo_FFN_mmap[bias_v + j][1] = w_v_proj_sum[i][t * KV_HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL + j];
+            }
         }
     }
 
@@ -436,15 +439,18 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
             return;
         }
         int id;
-        while (fin >> id) {
+        while (fin >> id && token_idx.size() < MAX_PRE_SEQ_LEN)  {
             token_idx.push_back(id);
         }
         std::cout << "Loaded " << token_idx.size() << " tokens:\n";
 
-        for (size_t idx = 0; idx < io_init_vecs; ++idx) {
-            io_mmap[idx] = vocab_lib[token_idx[token_idx.size() - 1] * io_init_vecs + idx];
-        }
+        // for (size_t idx = 0; idx < io_init_vecs; ++idx) {
+        //     io_mmap[idx] = vocab_lib[token_idx[token_idx.size() - 1] * io_init_vecs + idx];
+        // }
 
+        for (size_t idx = 0; idx < io_init_vecs; ++idx) {
+            io_mmap[idx] = vocab_lib[128000 * io_init_vecs + idx];
+        }
 
         // Random init KV caches
         for (int i = 0; i < MAX_SUM_SEQ_LEN; i++) {
@@ -503,8 +509,9 @@ void SpinQuant_Decoding_test(int argc, char* argv[]) {
             tapa::read_only_mmap<hls::vector<float, T_BLOCK_PARALLEL>>(gamma_beta_mmap),
             tapa::read_only_mmap<float>(rand_seeds_mmap),
             tapa::write_only_mmap<int>(sampled_token_idx_mmap),
-            MAX_PRE_SEQ_LEN,
-            MAX_DEC_SEQ_LEN
+            // MAX_PRE_SEQ_LEN,
+            0,
+            MAX_DEC_SEQ_LEN/2
         );
             
         double t_s = kernel_time_ns * 1e-9;

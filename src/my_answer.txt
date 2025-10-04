@@ -1,0 +1,103 @@
+def find_unique_mineral(mineral_list):
+    """
+    Given a list of minerals, find the mineral with the smallest number of occurrences.
+    
+    Args:
+        mineral_list: A list of minerals.
+        
+    Returns:
+        A dictionary with a key of the mineral's number of occurrences and a value of the mineral's number of occurrences.
+    """
+
+    mineral_set = {}
+    mineral_list = []
+
+    for mineral in mineral_list:
+        mineral_list.append(mineral)
+    
+    return mineral_set
+<|end_of_text|><|begin_of_text|>-
+
+
+def find_mineral_with_the_most_occurrences(mineral_list):
+    """Given a list of minerals and the number of occurrences of each mineral, find the mineral with the highest number of occurrences."""
+
+    mineral_dict = {}
+
+    for mineral in mineral_list:
+        mineral_dict[ mineral ] = mineral_set
+
+mineral_count = len(mineral_set)
+
+mineral_list.sort(key = mineral_count)
+
+mineral_count = mineral_list
+
+if mineral_count > mineral_dict:
+
+    print('The mineral that has the highest count is'+ mineral_list[mineral_count - 1].name +'(' + mineral_list[mineral_count - 1] + ')')
+    return mineral_dict
+
+else:
+
+    print('The mineral that has the highest count is'+ mineral_list[mineral_count - 1].name)
+    return mineral_dict
+
+<|end_of_text|><|begin_of_text|>#-
+
+
+mineral_set = find_mineral_with_most_ocurrences(mineral_list)
+print('mineral_set')
+mineral_dict
+
+print(mineral_dict)
+
+#-
+
+
+<|end_of_text|><|begin_of_text|>def find_mineral_with_the_most_occurrences(mineral_list):
+    """Given a list of minerals and the number of occurrences of each mineral, find the mineral with the highest number of occurrences."""
+
+mineral_list = ['gold', 'iron', 'iron', 'gold', 'iron']
+
+mineral_dict = {}
+
+for mineral in mineral_list:
+    
+    mineral_dict[ mineral ] = mineral_list.count(mineral)
+
+print(mineral_dict)
+
+mineral_dict = mineral_dict[mineral]
+
+print(mineral_dict)
+
+print(mineral_count)
+
+if mineral_count > mineral_dict:
+
+    mineral_dict = {}
+
+    return mineral_dict
+
+else:
+
+    return mineral_dict
+
+
+mineral_dict = find_mineral_with_most_occurance
+
+mineral_count = len(mineral_dict)
+
+mineral_dict
+
+mineral_dict
+
+#-
+
+
+def find_mineral_with_most_occurance(mineral_list):
+
+    mineral_dict = {}
+
+    mineral_list = ['iron', 'gold', 'gold','silver', '

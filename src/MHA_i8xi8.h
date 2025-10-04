@@ -38,7 +38,7 @@ void pref_quant_layer_q_fp32_int8(
 
     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
         pref_static_sym_per_tensor_quant_layer_fp32_qint<8, TOKEN_PARALLEL, HEAD_DIM, Q_HEAD_NUM>(
-            input_stream, output_stream, Q_s, block_id, seq_len, HEAD_DIM
+            input_stream, output_stream, Q_s, block_id, seq_len, HEAD_DIM, sqrt_HEAD_DIM
         );
     }
 }
@@ -157,6 +157,7 @@ void pref_dequant_layer_a_int_fp32(
     }
 }
 
+
 void pref_output_drainer_a_fp32(
     tapa::istream<hls::vector<float, TOKEN_PARALLEL>>& output_stream,
     tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> output_mmap, 
@@ -209,6 +210,17 @@ void MHA_i8xi8_qxk_Prefilling_tb(
 }
 
 
+void pref_causal_mask(
+    tapa::istream<hls::vector<float, TOKEN_PARALLEL>>& input_stream,
+    tapa::ostream<hls::vector<float, TOKEN_PARALLEL>>& output_stream,
+    int seq_len
+){
+    decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
+        pref_causal_mask_template<float, TOKEN_PARALLEL, MAX_PRE_SEQ_LEN, MAX_PRE_SEQ_LEN, Q_HEAD_NUM>(
+            input_stream, output_stream, seq_len, seq_len
+        );
+    }
+}
 
 void pref_Softmax_MHA(
     tapa::istream<hls::vector<float, TOKEN_PARALLEL>>& input_stream,
@@ -216,8 +228,8 @@ void pref_Softmax_MHA(
     int seq_len
 ){
     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-        pref_Softmax<float, TOKEN_PARALLEL, MAX_PRE_SEQ_LEN, MAX_PRE_SEQ_LEN, Q_HEAD_NUM, true>(
-            input_stream, output_stream, seq_len, seq_len, sqrt_HEAD_DIM
+        pref_Softmax<float, TOKEN_PARALLEL, MAX_PRE_SEQ_LEN, MAX_PRE_SEQ_LEN, Q_HEAD_NUM>(
+            input_stream, output_stream, seq_len, seq_len
         ); // scale input before softmax
         cout << "Block_id: " << block_id << " Softmax_MHA completed." << endl;
     }
@@ -239,7 +251,7 @@ void pref_quant_layer_sfm_a_fp32_int8(
 
 
     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-        pref_static_sym_per_tensor_quant_layer_fp32_qint<8, TOKEN_PARALLEL, MAX_PRE_SEQ_LEN, Q_HEAD_NUM>(
+        pref_static_sym_per_tensor_quant_layer_fp32_qint<8, TOKEN_PARALLEL, MAX_PRE_SEQ_LEN, Q_HEAD_NUM, false>(
             input_stream, output_stream, A_s, block_id, seq_len, seq_len
         );
     }
@@ -309,7 +321,7 @@ void pref_MHA_i8xi8_axv(
     int seq_len
 ){
     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-        pref_MHA_i8xi8_axv_template<TOKEN_PARALLEL, PRE_V_PARALLEL, Q_HEAD_NUM, HEAD_DIM>(
+        pref_MHA_i8xi8_axv_template<TOKEN_PARALLEL, PRE_V_PARALLEL, Q_HEAD_NUM, HEAD_DIM, MAX_PRE_SEQ_LEN, log2_MAX_PRE_SEQ_LEN, true>(
             input_seq, weight_loader, output_seq, seq_len
         );
         cout << "Block_id: " << block_id << " MHA_i8xi8_axv completed." << endl;
@@ -374,6 +386,7 @@ void MHA_i8xi8_Prefilling_tb(
     tapa::stream<hls::vector<ap_int<log2_HEAD_DIM + 16>, TOKEN_PARALLEL>> quant_a_stream("quant_a_stream");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> a_stream("a_stream");
 
+    tapa::stream<hls::vector<float, TOKEN_PARALLEL>> masked_a_stream("masked_a_stream");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> sfm_a_stream("sfm_a_stream");
     tapa::stream<hls::vector<ap_int<8>, TOKEN_PARALLEL>> quant_sfm_a_stream("quant_sfm_a_stream");
 
@@ -403,7 +416,8 @@ void MHA_i8xi8_Prefilling_tb(
     .invoke(pref_MHA_i8xi8_qxk, quant_q_stream, load_quant_k_stream, quant_a_stream, seq_len)
     .invoke(pref_dequant_layer_a_int_fp32, quant_a_stream, a_stream, seq_len)
 
-    .invoke(pref_Softmax_MHA, a_stream, sfm_a_stream, seq_len)
+    .invoke(pref_causal_mask, a_stream, masked_a_stream, seq_len)
+    .invoke(pref_Softmax_MHA, masked_a_stream, sfm_a_stream, seq_len)
     .invoke(pref_quant_layer_sfm_a_fp32_int8, sfm_a_stream, quant_sfm_a_stream, seq_len)
 
     .invoke(pref_MHA_i8xi8_axv, quant_sfm_a_stream, load_quant_v_stream, quant_o_stream, seq_len)
@@ -460,7 +474,7 @@ void dec_quant_layer_q_fp32_int8(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_MHA_static_sym_per_tensor_quant_layer_fp32_qint<8, DEC_HEAD_PARALLEL, HEAD_DIM, Q_HEAD_NUM>(
-                input_stream, output_stream, Q_s, block_id, HEAD_DIM
+                input_stream, output_stream, Q_s, block_id, HEAD_DIM, sqrt_HEAD_DIM
             );
         }
     }
@@ -565,7 +579,7 @@ void dec_MHA_i8xi8_qxk(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_MHA_i8xi8_qxk_template<DEC_HEAD_PARALLEL, DEC_K_PARALLEL, Q_HEAD_NUM, HEAD_DIM, log2_HEAD_DIM>(
-                input_seq, weight_loaders, output_seq, pre_seq_len + dec_seq_id
+                input_seq, weight_loaders, output_seq, pre_seq_len + dec_seq_id + 1
             );
             printf("Dec_seq_id %d: Block_id %d: MHA_i8xi8_qxk completed.\n", dec_seq_id, block_id);
         }
@@ -581,7 +595,7 @@ void dec_MHA_i8xi8_qxk_input_broadcastor(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_MHA_qxk_input_broadcastor_template<ap_int<8>, DEC_HEAD_PARALLEL, DEC_K_PARALLEL, Q_HEAD_NUM, HEAD_DIM>(
-                input_seq, input_loaders, pre_seq_len + dec_seq_id
+                input_seq, input_loaders, pre_seq_len + dec_seq_id + 1
             );
         }
     }
@@ -597,7 +611,7 @@ void dec_MHA_i8xi8_qxk_flatten(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_MHA_i8xi8_qxk_flatten_template<DEC_HEAD_PARALLEL, DEC_K_PARALLEL, Q_HEAD_NUM, HEAD_DIM, log2_HEAD_DIM>(
-                input_loader, weight_loader, output_drainer, pre_seq_len + dec_seq_id
+                input_loader, weight_loader, output_drainer, pre_seq_len + dec_seq_id + 1
             );
             printf("Dec_seq_id %d: Block_id %d: MHA_i8xi8_qxk_flatten completed.\n", dec_seq_id, block_id);
         }
@@ -613,7 +627,7 @@ void dec_MHA_i8xi8_qxk_output_merger(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_MHA_qxk_output_merger_template<ap_int<log2_HEAD_DIM + 16>, DEC_HEAD_PARALLEL, DEC_K_PARALLEL, Q_HEAD_NUM>(
-                output_drainers, output_seq, pre_seq_len + dec_seq_id
+                output_drainers, output_seq, pre_seq_len + dec_seq_id + 1
             );
         }
     }
@@ -630,7 +644,7 @@ void dec_quant_a_discard(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_quant_a_discard_template<ap_int<log2_HEAD_DIM + 16>, DEC_HEAD_PARALLEL, DEC_K_PARALLEL, Q_HEAD_NUM>(
-                input_seq, output_seq, pre_seq_len + dec_seq_id
+                input_seq, output_seq, pre_seq_len + dec_seq_id + 1
             );
         }
     }
@@ -658,7 +672,7 @@ void dec_dequant_layer_a_int_fp32(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_MHA_static_sym_per_tensor_dequant_layer_qint_fp32<log2_HEAD_DIM + 16, DEC_HEAD_PARALLEL, MAX_SUM_SEQ_LEN, Q_HEAD_NUM, KV_HEAD_NUM>(
-                input_stream, output_stream, Q_s, K_s, block_id, pre_seq_len + dec_seq_id
+                input_stream, output_stream, Q_s, K_s, block_id, pre_seq_len + dec_seq_id + 1
             );
         }
     }
@@ -676,7 +690,7 @@ void dec_output_drainer_a_fp32(
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             attn_head_loop: for (int H = 0; H < Q_HEAD_NUM/DEC_HEAD_PARALLEL; H++){
                 int bias = ((dec_seq_id * DECODER_LAYER_NUM + block_id) * Q_HEAD_NUM/DEC_HEAD_PARALLEL + H) * MAX_SUM_SEQ_LEN;
-                write_output_loop: for(int i = 0; i < pre_seq_len + dec_seq_id; i++){
+                write_output_loop: for(int i = 0; i < pre_seq_len + dec_seq_id + 1; i++){
                     #pragma HLS pipeline II=1
                     output_mmap[bias + i] = output_stream.read();
                 }
@@ -742,6 +756,24 @@ void MHA_i8xi8_qxk_decoding_tb(
 
 
 //////////////////////
+
+// void dec_causal_mask(
+//     tapa::istream<hls::vector<float, DEC_HEAD_PARALLEL>>& input_stream,
+//     tapa::ostream<hls::vector<float, DEC_HEAD_PARALLEL>>& output_stream,
+//     int pre_seq_len,
+//     int dec_seq_len
+// ){
+//     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
+//         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
+//             dec_causal_mask_template<float, DEC_HEAD_PARALLEL, MAX_SUM_SEQ_LEN, Q_HEAD_NUM>(
+//                 input_stream, output_stream, pre_seq_len + dec_seq_id + 1
+//             ); // scale input before softmax
+//         }
+//     }
+// }
+
+
+
 void dec_Softmax_MHA(
     tapa::istream<hls::vector<float, DEC_HEAD_PARALLEL>>& input_stream,
     tapa::ostream<hls::vector<float, DEC_HEAD_PARALLEL>>& output_stream,
@@ -750,8 +782,8 @@ void dec_Softmax_MHA(
 ){
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-            dec_MHA_Softmax<float, DEC_HEAD_PARALLEL, MAX_SUM_SEQ_LEN, Q_HEAD_NUM, true>(
-                input_stream, output_stream, pre_seq_len + dec_seq_id, sqrt_HEAD_DIM
+            dec_MHA_Softmax<float, DEC_HEAD_PARALLEL, MAX_SUM_SEQ_LEN, Q_HEAD_NUM>(
+                input_stream, output_stream, pre_seq_len + dec_seq_id + 1
             ); // scale input before softmax
             printf("Dec_seq_id %d: Block_id %d: Softmax_MHA completed.\n", dec_seq_id, block_id);
         }
@@ -774,8 +806,8 @@ void dec_quant_layer_sfm_a_fp32_int8(
 
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-            dec_MHA_static_sym_per_tensor_quant_layer_fp32_qint<8, DEC_HEAD_PARALLEL, MAX_SUM_SEQ_LEN, Q_HEAD_NUM>(
-                input_stream, output_stream, A_s, block_id, pre_seq_len + dec_seq_id
+            dec_MHA_static_sym_per_tensor_quant_layer_fp32_qint<8, DEC_HEAD_PARALLEL, MAX_SUM_SEQ_LEN, Q_HEAD_NUM, false>(
+                input_stream, output_stream, A_s, block_id, pre_seq_len + dec_seq_id + 1
             );
         }
     }
@@ -878,8 +910,8 @@ void dec_MHA_i8xi8_axv(
 ){
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-            dec_MHA_i8xi8_axv_template<DEC_HEAD_PARALLEL, DEC_V_PARALLEL, Q_HEAD_NUM, HEAD_DIM, MAX_SUM_SEQ_LEN, log2_MAX_SUM_SEQ_LEN>(
-                input_seq, weight_loaders, output_seq, pre_seq_len + dec_seq_id
+            dec_MHA_i8xi8_axv_template<DEC_HEAD_PARALLEL, DEC_V_PARALLEL, Q_HEAD_NUM, HEAD_DIM, MAX_SUM_SEQ_LEN, log2_MAX_SUM_SEQ_LEN, true>(
+                input_seq, weight_loaders, output_seq, pre_seq_len + dec_seq_id + 1
             );
             printf("Dec_seq_id %d: Block_id %d: MHA_i8xi8_axv completed.\n", dec_seq_id, block_id);
         }
@@ -895,7 +927,7 @@ void dec_MHA_i8xi8_axv_input_broadcastor(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_MHA_axv_input_broadcastor_template<ap_int<8>, DEC_HEAD_PARALLEL, DEC_V_PARALLEL, Q_HEAD_NUM, HEAD_DIM>(
-                input_seq, input_loaders, pre_seq_len + dec_seq_id
+                input_seq, input_loaders, pre_seq_len + dec_seq_id + 1
             );
         }
     }
@@ -910,8 +942,8 @@ void dec_MHA_i8xi8_axv_flatten(
 ){
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-            dec_MHA_i8xi8_axv_flatten_template<DEC_HEAD_PARALLEL, DEC_V_PARALLEL, Q_HEAD_NUM, HEAD_DIM, MAX_SUM_SEQ_LEN, log2_MAX_SUM_SEQ_LEN>(
-                input_loader, weight_loader, output_drainer, pre_seq_len + dec_seq_id
+            dec_MHA_i8xi8_axv_flatten_template<DEC_HEAD_PARALLEL, DEC_V_PARALLEL, Q_HEAD_NUM, HEAD_DIM, MAX_SUM_SEQ_LEN, log2_MAX_SUM_SEQ_LEN, true>(
+                input_loader, weight_loader, output_drainer, pre_seq_len + dec_seq_id + 1
             );
             printf("Dec_seq_id %d: Block_id %d: MHA_i8xi8_axv_flatten completed.\n", dec_seq_id, block_id);
         }

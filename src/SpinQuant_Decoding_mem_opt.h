@@ -303,11 +303,11 @@ void dec_quant_layer_qkvo_FFN(
 
             dec_quant_layer_fp32_qint<4, true, T_QKVO_FFN_BLOCK_PARALLEL, INTER_DIM>(
                 input_stream, input_s_b_stream, output_stream, HIDDEN_DIM
-            ); // for ffn_up
+            ); // for ffn_gate
 
             dec_quant_layer_fp32_qint<4, true, T_QKVO_FFN_BLOCK_PARALLEL, INTER_DIM>(
                 input_stream, input_s_b_stream, output_stream, HIDDEN_DIM
-            ); // for gate
+            ); // for ffn_up
 
             dec_quant_layer_fp32_qint<4, true, T_QKVO_FFN_BLOCK_PARALLEL, INTER_DIM>(
                 input_stream, input_s_b_stream, output_stream, INTER_DIM
@@ -348,12 +348,12 @@ void dec_weight_loader_qkvo_FFN(
             ); //for o
 
             dec_weight_loader_int4_pack_2<T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, INTER_DIM>(
-                weight_mmap, weight_stream, block_id, HIDDEN_DIM, INTER_DIM, addr_bias + w_ffn_up_addr_bias
-            ); // for ffn_up
+                weight_mmap, weight_stream, block_id, HIDDEN_DIM, INTER_DIM, addr_bias + w_ffn_gate_addr_bias
+            ); // for ffn_gate
 
             dec_weight_loader_int4_pack_2<T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, INTER_DIM>(
-                weight_mmap, weight_stream, block_id, HIDDEN_DIM, INTER_DIM, addr_bias + w_ffn_gate_addr_bias
-            ); // for gate
+                weight_mmap, weight_stream, block_id, HIDDEN_DIM, INTER_DIM, addr_bias + w_ffn_up_addr_bias
+            ); // for ffn_up
 
             dec_weight_loader_int4_pack_2<T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, INTER_DIM>(
                 weight_mmap, weight_stream, block_id, INTER_DIM, HIDDEN_DIM, addr_bias + w_ffn_down_addr_bias
@@ -394,12 +394,12 @@ void dec_weight_s_loader_qkvo_FFN(
             ); // for o
 
             dec_weight_s_loader_fp32_bandwidth<T_QKVO_FFN_BLOCK_PARALLEL, true, INTER_DIM>(
-                weight_s_sum_mmap, weight_s_sum_stream, block_id, INTER_DIM, addr_bias + w_s_ffn_up_addr_bias
-            ); // for ffn_up
+                weight_s_sum_mmap, weight_s_sum_stream, block_id, INTER_DIM, addr_bias + w_s_ffn_gate_addr_bias
+            ); // for ffn_gate
 
             dec_weight_s_loader_fp32_bandwidth<T_QKVO_FFN_BLOCK_PARALLEL, true, INTER_DIM>(
-                weight_s_sum_mmap, weight_s_sum_stream, block_id, INTER_DIM, addr_bias + w_s_ffn_gate_addr_bias
-            ); // for gate
+                weight_s_sum_mmap, weight_s_sum_stream, block_id, INTER_DIM, addr_bias + w_s_ffn_up_addr_bias
+            ); // for ffn_up
 
             dec_weight_s_loader_fp32_bandwidth<T_QKVO_FFN_BLOCK_PARALLEL, true, INTER_DIM>(
                 weight_s_sum_mmap, weight_s_sum_stream, block_id, HIDDEN_DIM, addr_bias + w_s_ffn_down_addr_bias
@@ -446,13 +446,13 @@ void dec_Linear_Layer_i4xi4_qkvo_FFN(
 
             dec_Linear_Layer_i4xi4<T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, log2_INTER_DIM, INTER_DIM, true>(
                 input_stream, weight_streams, output_stream, HIDDEN_DIM, INTER_DIM
-            ); // for ffn_up
-            printf("Dec_seq_id %d: Block_id %d: Linear_Layer_i4xi4_qkvo_FFN completed for ffn_up.\n", dec_seq_id, block_id);
+            ); // for ffn_gate   
+            printf("Dec_seq_id %d: Block_id %d: Linear_Layer_i4xi4_qkvo_FFN completed for ffn_gate.\n", dec_seq_id, block_id);
 
             dec_Linear_Layer_i4xi4<T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, log2_INTER_DIM, INTER_DIM, true>(
                 input_stream, weight_streams, output_stream, HIDDEN_DIM, INTER_DIM
-            ); // for gate   
-            printf("Dec_seq_id %d: Block_id %d: Linear_Layer_i4xi4_qkvo_FFN completed for gate.\n", dec_seq_id, block_id);
+            ); // for ffn_up
+            printf("Dec_seq_id %d: Block_id %d: Linear_Layer_i4xi4_qkvo_FFN completed for ffn_up.\n", dec_seq_id, block_id);
 
             dec_Linear_Layer_i4xi4<T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, log2_INTER_DIM, INTER_DIM, true>(
                 input_stream, weight_streams, output_stream, INTER_DIM, HIDDEN_DIM
@@ -486,10 +486,10 @@ void dec_Linear_Layer_i4xi4_qkvo_FFN_input_broadcastor(
             ); // for o
             dec_stream_distributor<ap_int<4>, T_QKVO_FFN_BLOCK_PARALLEL, 2, INTER_DIM>(
                 input_stream, input_streams_half, 2, HIDDEN_DIM
-            ); // for ffn_up
+            ); // for ffn_gate
             dec_stream_distributor<ap_int<4>, T_QKVO_FFN_BLOCK_PARALLEL, 2, INTER_DIM>(
                 input_stream, input_streams_half, 2, HIDDEN_DIM
-            ); // for gate
+            ); // for ffn_up
             dec_stream_distributor<ap_int<4>, T_QKVO_FFN_BLOCK_PARALLEL, 2, INTER_DIM>(
                 input_stream, input_streams_half, 2, INTER_DIM
             ); // for ffn_down
@@ -525,13 +525,13 @@ void dec_Linear_Layer_i4xi4_qkvo_FFN_half(
 
             dec_Linear_Layer_i4xi4_unroll<T_QKVO_FFN_BLOCK_PARALLEL, 2, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, log2_INTER_DIM, INTER_DIM, true>(
                 input_stream, weight_streams, output_stream, HIDDEN_DIM, INTER_DIM
-            ); // for ffn_up
-            printf("Dec_seq_id %d: Block_id %d: Linear_Layer_i4xi4_qkvo_FFN completed for ffn_up.\n", dec_seq_id, block_id);
+            ); // for ffn_gate   
+            printf("Dec_seq_id %d: Block_id %d: Linear_Layer_i4xi4_qkvo_FFN completed for ffn_gate.\n", dec_seq_id, block_id);
 
             dec_Linear_Layer_i4xi4_unroll<T_QKVO_FFN_BLOCK_PARALLEL, 2, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, log2_INTER_DIM, INTER_DIM, true>(
                 input_stream, weight_streams, output_stream, HIDDEN_DIM, INTER_DIM
-            ); // for gate   
-            printf("Dec_seq_id %d: Block_id %d: Linear_Layer_i4xi4_qkvo_FFN completed for gate.\n", dec_seq_id, block_id);
+            ); // for ffn_up
+            printf("Dec_seq_id %d: Block_id %d: Linear_Layer_i4xi4_qkvo_FFN completed for ffn_up.\n", dec_seq_id, block_id);
 
             dec_Linear_Layer_i4xi4_unroll<T_QKVO_FFN_BLOCK_PARALLEL, 2, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM, log2_INTER_DIM, INTER_DIM, true>(
                 input_stream, weight_streams, output_stream, INTER_DIM, HIDDEN_DIM
@@ -564,10 +564,10 @@ void dec_Linear_Layer_i4xi4_qkvo_FFN_output_merger(
             ); // for o
             dec_stream_block_parallel_merger<ap_int<log2_INTER_DIM + 8>, T_QKVO_FFN_BLOCK_PARALLEL, 2, INTER_DIM>(
                 output_streams_half, output_stream, INTER_DIM
-            ); // for ffn_up
+            ); // for ffn_gate
             dec_stream_block_parallel_merger<ap_int<log2_INTER_DIM + 8>, T_QKVO_FFN_BLOCK_PARALLEL, 2, INTER_DIM>(
                 output_streams_half, output_stream, INTER_DIM
-            ); // for gate
+            ); // for ffn_up
             dec_stream_block_parallel_merger<ap_int<log2_INTER_DIM + 8>, T_QKVO_FFN_BLOCK_PARALLEL, 2, INTER_DIM>(
                 output_streams_half, output_stream, HIDDEN_DIM
             ); // for ffn_down
@@ -610,11 +610,11 @@ void dec_dequant_layer_qkvo_FFN(
 
             dec_dequant_layer_qint_fp32_bandwidth<log2_INTER_DIM + 8, true, T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM>(
                 input_stream, input_s_b_stream, weight_s_sum_stream, output_stream, INTER_DIM
-            ); // for ffn_up
+            ); // for ffn_gate
 
             dec_dequant_layer_qint_fp32_bandwidth<log2_INTER_DIM + 8, true, T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM>(
                 input_stream, input_s_b_stream, weight_s_sum_stream, output_stream, INTER_DIM
-            ); // for gate
+            ); // for ffn_up
 
             dec_dequant_layer_qint_fp32_bandwidth<log2_INTER_DIM + 8, true, T_QKVO_FFN_BLOCK_PARALLEL, DEC_QKVO_FFN_W_PARALLEL, INTER_DIM>(
                 input_stream, input_s_b_stream, weight_s_sum_stream, output_stream, HIDDEN_DIM
@@ -665,14 +665,14 @@ void dec_qkvo_FFN_output_distributor(
             dec_io_buffer<float, T_QKVO_FFN_BLOCK_PARALLEL, T_BLOCK_PARALLEL, HIDDEN_DIM>(
                 output_qkvo_ffn_stream, output_o_stream, HIDDEN_DIM
             ); // for o
-
+            
+            dec_io_buffer<float, T_QKVO_FFN_BLOCK_PARALLEL, T_QKVO_FFN_BLOCK_PARALLEL, INTER_DIM>(
+                output_qkvo_ffn_stream, output_ffn_gate_stream, INTER_DIM
+            ); // for ffn_gate
+            
             dec_io_buffer<float, T_QKVO_FFN_BLOCK_PARALLEL, T_QKVO_FFN_BLOCK_PARALLEL, INTER_DIM>(
                 output_qkvo_ffn_stream, output_ffn_up_stream, INTER_DIM
             ); // for ffn_up
-
-            dec_io_buffer<float, T_QKVO_FFN_BLOCK_PARALLEL, T_QKVO_FFN_BLOCK_PARALLEL, INTER_DIM>(
-                output_qkvo_ffn_stream, output_ffn_gate_stream, INTER_DIM
-            ); // for gate
 
             dec_io_buffer<float, T_QKVO_FFN_BLOCK_PARALLEL, T_BLOCK_PARALLEL, HIDDEN_DIM>(
                 output_qkvo_ffn_stream, output_ffn_down_stream, HIDDEN_DIM
@@ -742,7 +742,7 @@ void dec_quant_layer_qkv_fp32_int8(
             ); // for v
             
             dec_MHA_static_sym_per_tensor_quant_layer_fp32_qint<8, DEC_HEAD_PARALLEL, HEAD_DIM, Q_HEAD_NUM>(
-                qkv_stream, quant_qkv_stream, Q_s, block_id, HEAD_DIM
+                qkv_stream, quant_qkv_stream, Q_s, block_id, HEAD_DIM, sqrt_HEAD_DIM
             ); // for q
             printf("Dec_seq_id %d: Block_id %d: quant_layer_qkv_fp32_int8 completed.\n", dec_seq_id, block_id);
         }
@@ -836,14 +836,14 @@ void dec_residual_layer_output_distributor(
 
 //FFN Swish and Gate_layer and R4 FHT
 void dec_Swish_Layer_FFN(
-    tapa::istream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>>& input_stream_ffn_up,
-    tapa::ostream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>>& output_stream_sw_ffn_up,
+    tapa::istream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>>& input_stream,
+    tapa::ostream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>>& output_stream,
     int dec_seq_len
 ){
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_Swish<float, T_QKVO_FFN_BLOCK_PARALLEL, INTER_DIM>(
-                input_stream_ffn_up, output_stream_sw_ffn_up, INTER_DIM
+                input_stream, output_stream, INTER_DIM
             );
             printf("Dec_seq_id %d: Block_id %d: Swish_Layer_ffn completed.\n", dec_seq_id, block_id);
         }
@@ -874,7 +874,7 @@ void dec_FHT_R4(
     decoder_seq_loop: for (int dec_seq_id = 0; dec_seq_id < dec_seq_len; dec_seq_id++){
         decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
             dec_FHT<float, T_QKVO_FFN_BLOCK_PARALLEL, INTER_DIM, log2_INTER_DIM>(
-                input_stream, output_stream
+                input_stream, output_stream, sqrt_INTER_DIM
             );
             printf("Dec_seq_id %d: Block_id %d: R4 rotation completed.\n", dec_seq_id, block_id);
         }
@@ -1000,7 +1000,7 @@ void SpinQuant_Decoding(
     tapa::stream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>> output_ffn_up_stream("output_ffn_up_stream");
     tapa::stream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>> output_ffn_gate_stream("output_ffn_gate_stream");
     tapa::stream<hls::vector<float, T_BLOCK_PARALLEL>> output_ffn_down_stream("output_ffn_down_stream");
-    tapa::stream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>> output_vocab_logits_stream("output_vocab_logits_stream");
+    tapa::stream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>, HIDDEN_DIM/T_QKVO_FFN_BLOCK_PARALLEL> output_vocab_logits_stream("output_vocab_logits_stream");
 
     //MHA
     tapa::stream<hls::vector<float, DEC_HEAD_PARALLEL>> RoPE_qkv_stream("RoPE_qkv_stream");
@@ -1036,7 +1036,7 @@ void SpinQuant_Decoding(
     tapa::stream<hls::vector<float, T_BLOCK_PARALLEL>, HIDDEN_DIM/T_BLOCK_PARALLEL> res1_stream("res1_stream");
 
     //FFN Layer
-    tapa::stream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>, INTER_DIM/T_QKVO_FFN_BLOCK_PARALLEL> sw_output_ffn_up_stream("sw_output_ffn_up_stream");
+    tapa::stream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>, INTER_DIM/T_QKVO_FFN_BLOCK_PARALLEL> sw_output_ffn_gate_stream("sw_output_ffn_gate_stream");
     tapa::stream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>> gated_sw_ffn_up_stream("gated_sw_ffn_up_stream");
     tapa::stream<hls::vector<float, T_QKVO_FFN_BLOCK_PARALLEL>> input_ffn_down_stream("input_ffn_down_stream");
 
@@ -1111,9 +1111,10 @@ void SpinQuant_Decoding(
     .invoke(dec_residual_layer_output_distributor, res0_stream_res1_stream, res0_stream, res1_stream, dec_seq_len)
 
     // FFN layer
-    .invoke(dec_Swish_Layer_FFN, output_ffn_up_stream, sw_output_ffn_up_stream, dec_seq_len)
-    .invoke(dec_Gate_layer_FFN, sw_output_ffn_up_stream, output_ffn_gate_stream, gated_sw_ffn_up_stream, dec_seq_len)
+    .invoke(dec_Swish_Layer_FFN, output_ffn_gate_stream, sw_output_ffn_gate_stream, dec_seq_len)
+    .invoke(dec_Gate_layer_FFN, output_ffn_up_stream, sw_output_ffn_gate_stream, gated_sw_ffn_up_stream, dec_seq_len)
     .invoke(dec_FHT_R4, gated_sw_ffn_up_stream, input_ffn_down_stream, dec_seq_len)
+    
 
     //output storage
     .invoke(dec_block_output_broadcastor, res1_stream, res1_stream_store, res1_stream_ln, dec_seq_len)

@@ -2,71 +2,83 @@
 #define _LOGITS_H
 #include "config.h"
 
-template <typename T, int block_parallel, int max_logits_num, int top_k, bool enable_softmax=true, bool enable_sub_max=true>
+template <typename T, int block_parallel_samp, int max_logits_num, int top_k, int max_hidden_dim=HIDDEN_DIM, bool enable_softmax=true, bool enable_sub_max=true>
 void dec_Logits_Max_K_Layer(
-    tapa::istream<hls::vector<T, block_parallel>>& logits_stream,
+    tapa::istream<hls::vector<T, block_parallel_samp>>& logits_stream,
     tapa::ostream<hls::vector<T, 2>>& max_logits_stream,
     int logits_num = max_logits_num
 ){
-    T max_logits_idx[block_parallel][top_k];
+    hls::vector<T, block_parallel_samp> logits_buffer[max_hidden_dim/block_parallel_samp];
+    
+    int max_logits_idx[block_parallel_samp][top_k];
     #pragma HLS ARRAY_PARTITION variable=max_logits_idx complete
-    T max_logits[block_parallel][top_k];
+    T max_logits[block_parallel_samp][top_k];
     #pragma HLS ARRAY_PARTITION variable=max_logits complete
 
-    T max_logits_idx_final[top_k];
+    int max_logits_idx_final[top_k];
     #pragma HLS ARRAY_PARTITION variable=max_logits_idx_final complete
     T max_logits_final[top_k];
     #pragma HLS ARRAY_PARTITION variable=max_logits_final complete
-
     T max_logits_final_exp[top_k];
     #pragma HLS ARRAY_PARTITION variable=max_logits_final_exp complete
 
     init_loop: for (int k = 0; k < top_k; k++) {
     #pragma HLS unroll
-        for(int i = 0; i < block_parallel; i++){
+        for(int i = 0; i < block_parallel_samp; i++){
         #pragma HLS unroll
             max_logits_idx[i][k] = -1;
-            max_logits[i][k] = -1e6;
+            max_logits[i][k] = -1e32;
         }
         max_logits_idx_final[k] = -1;
-        max_logits_final[k] = -1e6;
+        max_logits_final[k] = -1e32;
     }
 
-    io_block_loop: for (int k = 0; k < logits_num/block_parallel; k++) {
-    #pragma HLS loop_tripcount min=1 max=max_logits_num/block_parallel
-        hls::vector<T, block_parallel> temp_pack = logits_stream.read();
 
-        // maintain Top-K in parallel for each lane
-        lane_top_k_loop: for (int i = 0; i < block_parallel; i++) {
-        #pragma HLS unroll
-            T v = temp_pack[i];
-            T v_idx = static_cast<T>(int(i * (logits_num/block_parallel) + k));
-            // find the position to insert
-            int insert_pos = -1;
-            for (int k = 0; k < top_k; k++) {
-                if (v > max_logits[i][k]) {
-                    insert_pos = k;
-                    break;
-                }
+    io_block_loop: for (int M = 0; M < (logits_num + max_hidden_dim - 1)/max_hidden_dim; M++) {
+    #pragma HLS loop_tripcount min=1 max=(max_logits_num + max_hidden_dim - 1)/max_hidden_dim
+        buffer_loop: for(int m = 0; m < max_hidden_dim/block_parallel_samp; m++){
+        #pragma HLS PIPELINE II=1
+            if(M * max_hidden_dim/block_parallel_samp + m < logits_num/block_parallel_samp){
+                logits_buffer[m] = logits_stream.read();
             }
-            // insert and shift
-            if (insert_pos != -1) {
-                for (int k = top_k - 1; k > insert_pos; k--) {
-                #pragma HLS unroll
-                    max_logits_idx[i][k] = max_logits_idx[i][k - 1];
-                    max_logits[i][k] = max_logits[i][k - 1];
+            else{
+                logits_buffer[m] = -1e32;
+            }
+        }
+
+        lane_top_k_loop: for(int m = 0; m < max_hidden_dim/block_parallel_samp; m++){
+            // maintain Top-K in parallel for each lane
+            for (int i = 0; i < block_parallel_samp; i++) {
+            #pragma HLS unroll
+                T v = logits_buffer[m][i];
+                int v_idx = i * (logits_num/block_parallel_samp) + M * max_hidden_dim/block_parallel_samp + m;
+                // find the position to insert
+                int insert_pos = -1;
+                top_k_pop_loop: for (int k = 0; k < top_k; k++) {
+                #pragma HLS PIPELINE II=1
+                    if (v > max_logits[i][k] && insert_pos == -1) {
+                        insert_pos = k;
+                    }
                 }
-                max_logits_idx[i][insert_pos] = v_idx;
-                max_logits[i][insert_pos] = v;
+                // insert and shift
+                if (insert_pos != -1) {
+                    for (int k = top_k - 1; k > insert_pos; k--) {
+                    #pragma HLS unroll
+                        max_logits_idx[i][k] = max_logits_idx[i][k - 1];
+                        max_logits[i][k] = max_logits[i][k - 1];
+                    }
+                    max_logits_idx[i][insert_pos] = v_idx;
+                    max_logits[i][insert_pos] = v;
+                }
             }
         }
     }
 
     // 4) compute final global Top-K over all candidates
     merge_loop: for (int K = 0; K < top_k; K++) {
-        top_k_block_loop: for (int i = 0; i < block_parallel; i++) {
+        top_k_block_loop: for (int i = 0; i < block_parallel_samp; i++) {
             T val = max_logits[i][K];
-            T val_idx = max_logits_idx[i][K];
+            int val_idx = max_logits_idx[i][K];
             int pos = -1;
             for (int k = 0; k < top_k; k++) {
             #pragma HLS unroll
@@ -86,6 +98,11 @@ void dec_Logits_Max_K_Layer(
             }
         }
     }
+
+    for(int i = 0; i < top_k; i++) {
+        printf("max_logits_idx_final[%d] = %d, max_logits_final[%d] = %f\n", i, max_logits_idx_final[i], i, max_logits_final[i]);
+    }
+
 
     // 5) apply softmax if enabled
     if (enable_softmax) {
@@ -128,6 +145,8 @@ void dec_Sampling_Embedding_Layer(
     int logits_num = max_logits_num,
     int io_hidden_dim = max_hidden_dim
 ){
+    hls::vector<T, block_parallel_samp> logits_buffer[max_hidden_dim/block_parallel_samp];
+    
     int max_logits_idx[block_parallel_samp][top_k];
     #pragma HLS ARRAY_PARTITION variable=max_logits_idx complete
     T max_logits[block_parallel_samp][top_k];
@@ -146,38 +165,49 @@ void dec_Sampling_Embedding_Layer(
         for(int i = 0; i < block_parallel_samp; i++){
         #pragma HLS unroll
             max_logits_idx[i][k] = -1;
-            max_logits[i][k] = -1e6;
+            max_logits[i][k] = -1e32;
         }
         max_logits_idx_final[k] = -1;
-        max_logits_final[k] = -1e6;
+        max_logits_final[k] = -1e32;
     }
 
-    io_block_loop: for (int k = 0; k < logits_num/block_parallel_samp; k++) {
-    #pragma HLS loop_tripcount min=1 max=max_logits_num/block_parallel_samp
-        hls::vector<T, block_parallel_samp> temp_pack = logits_stream.read();
 
-        // maintain Top-K in parallel for each lane
-        lane_top_k_loop: for (int i = 0; i < block_parallel_samp; i++) {
-        #pragma HLS unroll
-            T v = temp_pack[i];
-            int v_idx = i * (logits_num/block_parallel_samp) + k;
-            // find the position to insert
-            int insert_pos = -1;
-            for (int k = 0; k < top_k; k++) {
-                if (v > max_logits[i][k]) {
-                    insert_pos = k;
-                    break;
-                }
+    io_block_loop: for (int M = 0; M < (logits_num + max_hidden_dim - 1)/max_hidden_dim; M++) {
+    #pragma HLS loop_tripcount min=1 max=(max_logits_num + max_hidden_dim - 1)/max_hidden_dim
+        buffer_loop: for(int m = 0; m < max_hidden_dim/block_parallel_samp; m++){
+        #pragma HLS PIPELINE II=1
+            if(M * max_hidden_dim/block_parallel_samp + m < logits_num/block_parallel_samp){
+                logits_buffer[m] = logits_stream.read();
             }
-            // insert and shift
-            if (insert_pos != -1) {
-                for (int k = top_k - 1; k > insert_pos; k--) {
-                #pragma HLS unroll
-                    max_logits_idx[i][k] = max_logits_idx[i][k - 1];
-                    max_logits[i][k] = max_logits[i][k - 1];
+            else{
+                logits_buffer[m] = -1e32;
+            }
+        }
+
+        lane_top_k_loop: for(int m = 0; m < max_hidden_dim/block_parallel_samp; m++){
+            // maintain Top-K in parallel for each lane
+            for (int i = 0; i < block_parallel_samp; i++) {
+            #pragma HLS unroll
+                T v = logits_buffer[m][i];
+                int v_idx = i * (logits_num/block_parallel_samp) + M * max_hidden_dim/block_parallel_samp + m;
+                // find the position to insert
+                int insert_pos = -1;
+                top_k_pop_loop: for (int k = 0; k < top_k; k++) {
+                #pragma HLS PIPELINE II=1
+                    if (v > max_logits[i][k] && insert_pos == -1) {
+                        insert_pos = k;
+                    }
                 }
-                max_logits_idx[i][insert_pos] = v_idx;
-                max_logits[i][insert_pos] = v;
+                // insert and shift
+                if (insert_pos != -1) {
+                    for (int k = top_k - 1; k > insert_pos; k--) {
+                    #pragma HLS unroll
+                        max_logits_idx[i][k] = max_logits_idx[i][k - 1];
+                        max_logits[i][k] = max_logits[i][k - 1];
+                    }
+                    max_logits_idx[i][insert_pos] = v_idx;
+                    max_logits[i][insert_pos] = v;
+                }
             }
         }
     }
@@ -252,6 +282,7 @@ void dec_Sampling_Embedding_Layer(
     }
     
     sampled_idx = max_logits_idx_final[selected_k];
+    // sampled_idx = 271;
 
     // 6) retrieve embedding from vocab_lib and write to io_mmap
     dec_input_loader<T, block_parallel_embed, max_hidden_dim>(

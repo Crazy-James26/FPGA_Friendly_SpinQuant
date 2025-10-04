@@ -49,18 +49,18 @@ void pref_iembed_distributor(
     }
 }
 
-void pref_Residual_storer_res0(
-    tapa::istream<hls::vector<float, TOKEN_PARALLEL>>& res0_stream_cache,
-    tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res0_cache_mmap,
-    tapa::ostream<bool>& res0_cache_finish_stream,
-    int seq_len
-){
-    decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-        pref_Residual_storer<float, TOKEN_PARALLEL, HIDDEN_DIM>(
-            res0_stream_cache, res0_cache_mmap, res0_cache_finish_stream, 0, seq_len
-        );
-    }
-}
+// void pref_Residual_storer_res0(
+//     tapa::istream<hls::vector<float, TOKEN_PARALLEL>>& res0_stream_cache,
+//     tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res0_cache_mmap,
+//     tapa::ostream<bool>& res0_cache_finish_stream,
+//     int seq_len
+// ){
+//     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
+//         pref_Residual_storer<float, TOKEN_PARALLEL, HIDDEN_DIM>(
+//             res0_stream_cache, res0_cache_mmap, res0_cache_finish_stream, 0, seq_len
+//         );
+//     }
+// }
 
 
 // Layer Norm 0
@@ -392,18 +392,18 @@ void pref_vo_temporal_distributor(
 
 
 // Residual Layer 0
-void pref_Residual_loader_res0(
-    tapa::istream<bool>& res0_cache_ready_stream,
-    tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res0_cache_mmap,
-    tapa::ostream<hls::vector<float, TOKEN_PARALLEL>>& res0_stream,
-    int seq_len
-){
-    decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-        pref_Residual_loader<float, TOKEN_PARALLEL, HIDDEN_DIM>(
-            res0_cache_ready_stream, res0_cache_mmap, res0_stream, 0, seq_len
-        );
-    }
-}
+// void pref_Residual_loader_res0(
+//     tapa::istream<bool>& res0_cache_ready_stream,
+//     tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res0_cache_mmap,
+//     tapa::ostream<hls::vector<float, TOKEN_PARALLEL>>& res0_stream,
+//     int seq_len
+// ){
+//     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
+//         pref_Residual_loader<float, TOKEN_PARALLEL, HIDDEN_DIM>(
+//             res0_cache_ready_stream, res0_cache_mmap, res0_stream, 0, seq_len
+//         );
+//     }
+// }
 
 void pref_Residual_Layer_0(
     tapa::istream<hls::vector<float, TOKEN_PARALLEL>>& input_stream_o,
@@ -431,18 +431,18 @@ void pref_res0_distributor(
     }
 }
 
-void pref_Residual_storer_res1(
-    tapa::istream<hls::vector<float, TOKEN_PARALLEL>>& res1_cache_stream,
-    tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res1_cache_mmap,
-    tapa::ostream<bool>& res1_cache_finish_stream,
-    int seq_len
-){
-    decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-        pref_Residual_storer<float, TOKEN_PARALLEL, HIDDEN_DIM>(
-            res1_cache_stream, res1_cache_mmap, res1_cache_finish_stream, 0, seq_len
-        );
-    }
-}
+// void pref_Residual_storer_res1(
+//     tapa::istream<hls::vector<float, TOKEN_PARALLEL>>& res1_cache_stream,
+//     tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res1_cache_mmap,
+//     tapa::ostream<bool>& res1_cache_finish_stream,
+//     int seq_len
+// ){
+//     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
+//         pref_Residual_storer<float, TOKEN_PARALLEL, HIDDEN_DIM>(
+//             res1_cache_stream, res1_cache_mmap, res1_cache_finish_stream, 0, seq_len
+//         );
+//     }
+// }
 
 // Layer Norm 1
 void pref_Layer_Norm_1_gamma_beta_loader(
@@ -676,7 +676,7 @@ void pref_FHT_R4(
 ){
     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
         pref_FHT<float, TOKEN_PARALLEL, INTER_DIM, log2_INTER_DIM>(
-            input_stream_gated_sw_ffn_up, output_stream_r4_gated_sw_ffn_up, seq_len
+            input_stream_gated_sw_ffn_up, output_stream_r4_gated_sw_ffn_up, seq_len, sqrt_INTER_DIM
         );
         cout << "Block_id: " << block_id << " R4 rotation completed." << endl;
     }
@@ -762,18 +762,18 @@ void pref_dequant_layer_ffn_down_int_fp32(
 
 
 // Residual Layer 1
-void pref_Residual_loader_res1(
-    tapa::istream<bool>& res1_cache_ready_stream,
-    tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res1_cache_mmap,
-    tapa::ostream<hls::vector<float, TOKEN_PARALLEL>>& res1_stream,
-    int seq_len
-){
-    decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
-        pref_Residual_loader<float, TOKEN_PARALLEL, HIDDEN_DIM>(
-            res1_cache_ready_stream, res1_cache_mmap, res1_stream, 0, seq_len
-        );
-    }
-}
+// void pref_Residual_loader_res1(
+//     tapa::istream<bool>& res1_cache_ready_stream,
+//     tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res1_cache_mmap,
+//     tapa::ostream<hls::vector<float, TOKEN_PARALLEL>>& res1_stream,
+//     int seq_len
+// ){
+//     decoder_block_loop: for (int block_id = 0; block_id < DECODER_LAYER_NUM; block_id++){
+//         pref_Residual_loader<float, TOKEN_PARALLEL, HIDDEN_DIM>(
+//             res1_cache_ready_stream, res1_cache_mmap, res1_stream, 0, seq_len
+//         );
+//     }
+// }
 
 
 void pref_Residual_Layer_1(
@@ -819,8 +819,8 @@ void SpinQuant_Prefilling(
     tapa::mmap<hls::vector<float, 2>> w_ffn_down_s_sum_mmap,
     tapa::mmap<float> gamma_beta_mmap_0,
     tapa::mmap<float> gamma_beta_mmap_1,
-    tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res0_cache_mmap,
-    tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res1_cache_mmap,
+    // tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res0_cache_mmap,
+    // tapa::mmap<hls::vector<float, TOKEN_PARALLEL>> res1_cache_mmap,
     int seq_len
 ){
     tapa::stream<bool> block_input_ready_stream("block_input_ready_stream");
@@ -828,8 +828,8 @@ void SpinQuant_Prefilling(
 
     // cache input embedding for residual layer 0
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> iembed_stream_ln("iembed_stream_ln");
-    tapa::stream<hls::vector<float, TOKEN_PARALLEL>> iembed_stream_res0_cache("iembed_stream_res0_cache");
-    tapa::stream<bool, MAX_PRE_SEQ_LEN/TOKEN_PARALLEL> res0_cache_finish_stream("res0_cache_finish_stream");
+    // tapa::stream<hls::vector<float, TOKEN_PARALLEL>> iembed_stream_res0_cache("iembed_stream_res0_cache");
+    // tapa::stream<bool, MAX_PRE_SEQ_LEN/TOKEN_PARALLEL> res0_cache_finish_stream("res0_cache_finish_stream");
 
     // Layer Norm 0
     tapa::stream<float> gamma_beta_stream_0("gamma_beta_stream_0");
@@ -870,6 +870,7 @@ void SpinQuant_Prefilling(
     tapa::stream<hls::vector<ap_int<log2_HEAD_DIM + 16>, TOKEN_PARALLEL>, MAX_PRE_SEQ_LEN> quant_a_stream("quant_a_stream");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> a_stream("a_stream");
 
+    tapa::stream<hls::vector<float, TOKEN_PARALLEL>> masked_a_stream("masked_a_stream");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> sfm_a_stream("sfm_a_stream");
     tapa::stream<hls::vector<ap_int<8>, TOKEN_PARALLEL>, MAX_PRE_SEQ_LEN> quant_sfm_a_stream("quant_sfm_a_stream");
 
@@ -882,12 +883,12 @@ void SpinQuant_Prefilling(
 
 
     // Residual Layer 0 and Layer Norm 1
-    tapa::stream<hls::vector<float, TOKEN_PARALLEL>> iembed_stream_res0("iembed_stream_res0");
+    tapa::stream<hls::vector<float, TOKEN_PARALLEL>, 8 * HIDDEN_DIM> iembed_stream_res0("iembed_stream_res0");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> res0_stream("res0_stream");
 
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> res0_stream_ln("res0_stream_ln");
-    tapa::stream<hls::vector<float, TOKEN_PARALLEL>> res0_stream_res1_cache("res0_stream_res1_cache");
-    tapa::stream<bool, MAX_PRE_SEQ_LEN/TOKEN_PARALLEL> res1_cache_finish_stream;
+    // tapa::stream<hls::vector<float, TOKEN_PARALLEL>> res0_stream_res1_cache("res0_stream_res1_cache");
+    // tapa::stream<bool, MAX_PRE_SEQ_LEN/TOKEN_PARALLEL> res1_cache_finish_stream;
 
     tapa::stream<float> gamma_beta_stream_1("gamma_beta_stream_1");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> ln_res0_stream("ln_res0_stream");
@@ -905,6 +906,7 @@ void SpinQuant_Prefilling(
     tapa::stream<hls::vector<ap_int<log2_HIDDEN_DIM + 8>, TOKEN_PARALLEL>> quant_ffn_gate_stream_redundant("quant_ffn_gate_stream_redundant");
     tapa::stream<hls::vector<ap_int<log2_HIDDEN_DIM + 8>, TOKEN_PARALLEL>> quant_ffn_gate_stream("quant_ffn_gate_stream");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> ffn_gate_stream("ffn_gate_stream");
+    tapa::stream<hls::vector<float, TOKEN_PARALLEL>> sw_ffn_gate_stream("sw_ffn_gate_stream");
 
     tapa::stream<hls::vector<float, 2>, 2 * TOKEN_PARALLEL> ln_res0_s_b_stream_ffn_up("ln_res0_s_b_stream_ffn_up");
     tapa::stream<hls::vector<ap_int<4>, TOKEN_PARALLEL>> quant_ln_res0_stream_ffn_up("quant_ln_res0_stream_ffn_up");
@@ -915,7 +917,7 @@ void SpinQuant_Prefilling(
     tapa::stream<hls::vector<ap_int<log2_HIDDEN_DIM + 8>, TOKEN_PARALLEL>> quant_ffn_up_stream_redundant("quant_ffn_up_stream_redundant");
     tapa::stream<hls::vector<ap_int<log2_HIDDEN_DIM + 8>, TOKEN_PARALLEL>> quant_ffn_up_stream("quant_ffn_up_stream");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> ffn_up_stream("ffn_up_stream");
-    tapa::stream<hls::vector<float, TOKEN_PARALLEL>> sw_ffn_up_stream("sw_ffn_up_stream");
+    
 
     // Gate Layer for FFN UP
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>, INTER_DIM> gated_sw_ffn_up_stream("gated_sw_ffn_up_stream");
@@ -936,7 +938,7 @@ void SpinQuant_Prefilling(
 
 
     // Residual Layer 1
-    tapa::stream<hls::vector<float, TOKEN_PARALLEL>> res0_stream_res1("res0_stream_res1");
+    tapa::stream<hls::vector<float, TOKEN_PARALLEL>, 8 * HIDDEN_DIM> res0_stream_res1("res0_stream_res1");
     tapa::stream<hls::vector<float, TOKEN_PARALLEL>> res1_stream("res1_stream");
 
 
@@ -945,8 +947,8 @@ void SpinQuant_Prefilling(
 
 
     // cache input embedding for residual layer 0
-    .invoke(pref_iembed_distributor, iembed_stream, iembed_stream_ln, iembed_stream_res0_cache, seq_len)
-    .invoke(pref_Residual_storer_res0, iembed_stream_res0_cache, res0_cache_mmap, res0_cache_finish_stream, seq_len)
+    .invoke(pref_iembed_distributor, iembed_stream, iembed_stream_ln, iembed_stream_res0, seq_len)
+    // .invoke(pref_Residual_storer_res0, iembed_stream_res0_cache, res0_cache_mmap, res0_cache_finish_stream, seq_len)
 
     // Layer Norm 0
     .invoke(pref_Layer_Norm_0_gamma_beta_loader, gamma_beta_mmap_0, gamma_beta_stream_0)
@@ -968,7 +970,7 @@ void SpinQuant_Prefilling(
     .invoke(pref_quant_layer_vo_fp32_int4, merged_stream_vo, merged_s_b_stream_vo, quant_merged_stream_vo, seq_len)
     .invoke(pref_weight_loader_wv_wo, wv_wo_mmap, wv_wo_stream, seq_len)
     .invoke(pref_weight_s_loader_wv_wo, wv_wo_s_sum_mmap, wv_wo_s_sum_stream, seq_len)
-    // .invoke(Linear_Layer_i4xi4_vo, quant_merged_stream_vo, wv_wo_stream, quant_vo_stream, seq_len)
+    // .invoke(pref_Linear_Layer_i4xi4_vo, quant_merged_stream_vo, wv_wo_stream, quant_vo_stream, seq_len)
     .invoke(pref_Linear_Layer_i4xi4_vo, quant_merged_stream_vo, wv_wo_stream, quant_vo_stream_redundant, seq_len)
     .invoke(pref_vo_discard, quant_vo_stream_redundant, quant_vo_stream, seq_len)
     .invoke(pref_dequant_layer_vo_int_fp32, quant_vo_stream, merged_s_b_stream_vo, wv_wo_s_sum_stream, vo_stream, seq_len)
@@ -988,19 +990,20 @@ void SpinQuant_Prefilling(
     .invoke(pref_MHA_i8xi8_qxk, quant_q_stream, load_quant_k_stream, quant_a_stream, seq_len)
     .invoke(pref_dequant_layer_a_int_fp32, quant_a_stream, a_stream, seq_len)
 
-    .invoke(pref_Softmax_MHA, a_stream, sfm_a_stream, seq_len)
+    .invoke(pref_causal_mask, a_stream, masked_a_stream, seq_len)
+    .invoke(pref_Softmax_MHA, masked_a_stream, sfm_a_stream, seq_len)
     .invoke(pref_quant_layer_sfm_a_fp32_int8, sfm_a_stream, quant_sfm_a_stream, seq_len)
 
     .invoke(pref_MHA_i8xi8_axv, quant_sfm_a_stream, load_quant_v_stream, quant_input_stream_o, seq_len)
     .invoke(pref_dequant_layer_o_int_fp32, quant_input_stream_o, input_stream_o, seq_len)
 
     // Residual Layer 0
-    .invoke(pref_Residual_loader_res0, res0_cache_finish_stream, res0_cache_mmap, iembed_stream_res0, seq_len)
+    // .invoke(pref_Residual_loader_res0, res0_cache_finish_stream, res0_cache_mmap, iembed_stream_res0, seq_len)
     .invoke(pref_Residual_Layer_0, o_stream, iembed_stream_res0, res0_stream, seq_len)
     // .invoke(pref_block_output_drainer_sync, res1_stream, io_mmap, block_input_ready_stream, seq_len)
 
-    .invoke(pref_res0_distributor, res0_stream, res0_stream_ln, res0_stream_res1_cache, seq_len)
-    .invoke(pref_Residual_storer_res1, res0_stream_res1_cache, res1_cache_mmap, res1_cache_finish_stream, seq_len)
+    .invoke(pref_res0_distributor, res0_stream, res0_stream_ln, res0_stream_res1, seq_len)
+    // .invoke(pref_Residual_storer_res1, res0_stream_res1_cache, res1_cache_mmap, res1_cache_finish_stream, seq_len)
 
     // Layer Norm 1
     .invoke(pref_Layer_Norm_1_gamma_beta_loader, gamma_beta_mmap_1, gamma_beta_stream_1)
@@ -1016,6 +1019,7 @@ void SpinQuant_Prefilling(
     .invoke(pref_Linear_Layer_i4xi4_ffn_gate, quant_ln_res0_stream_ffn_gate, w_ffn_gate_streams, quant_ffn_gate_stream_redundant, seq_len)
     .invoke(pref_ffn_gate_discard, quant_ffn_gate_stream_redundant, quant_ffn_gate_stream, seq_len)
     .invoke(pref_dequant_layer_ffn_gate_int_fp32, quant_ffn_gate_stream, ln_res0_s_b_stream_ffn_gate, w_ffn_gate_s_sum_stream, ffn_gate_stream, seq_len)
+    .invoke(pref_Swish_Layer_ffn, ffn_gate_stream, sw_ffn_gate_stream, seq_len)
 
     .invoke(pref_quant_layer_ffn_up_fp32_int4, ln_res0_stream_ffn_up, ln_res0_s_b_stream_ffn_up, quant_ln_res0_stream_ffn_up, seq_len)
     .invoke<tapa::detach, PRE_FFN_W_BLOCK_NUM>(pref_weight_loader_w_ffn_up, w_ffn_up_mmaps, w_ffn_up_streams, seq_len)
@@ -1024,10 +1028,10 @@ void SpinQuant_Prefilling(
     .invoke(pref_Linear_Layer_i4xi4_ffn_up, quant_ln_res0_stream_ffn_up, w_ffn_up_streams, quant_ffn_up_stream_redundant, seq_len)
     .invoke(pref_ffn_up_discard, quant_ffn_up_stream_redundant, quant_ffn_up_stream, seq_len)
     .invoke(pref_dequant_layer_ffn_up_int_fp32, quant_ffn_up_stream, ln_res0_s_b_stream_ffn_up, w_ffn_up_s_sum_stream, ffn_up_stream, seq_len)
-    .invoke(pref_Swish_Layer_ffn, ffn_up_stream, sw_ffn_up_stream, seq_len)
+    
 
     // Gate Layer for FFN UP
-    .invoke(pref_Gate_Layer_ffn, ffn_gate_stream, sw_ffn_up_stream, gated_sw_ffn_up_stream, seq_len)
+    .invoke(pref_Gate_Layer_ffn, sw_ffn_gate_stream, ffn_up_stream, gated_sw_ffn_up_stream, seq_len)
 
     // R4 Rotation
     .invoke(pref_FHT_R4, gated_sw_ffn_up_stream, r4_gated_sw_ffn_up_stream, seq_len)
@@ -1043,7 +1047,7 @@ void SpinQuant_Prefilling(
 
 
     // Residual Layer 1
-    .invoke(pref_Residual_loader_res1, res1_cache_finish_stream, res1_cache_mmap, res0_stream_res1, seq_len)
+    // .invoke(pref_Residual_loader_res1, res1_cache_finish_stream, res1_cache_mmap, res0_stream_res1, seq_len)
     .invoke(pref_Residual_Layer_1, ffn_down_stream, res0_stream_res1, res1_stream, seq_len)
     .invoke(pref_block_output_drainer_sync, res1_stream, io_mmap, block_input_ready_stream, seq_len)
     

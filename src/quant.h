@@ -23,14 +23,16 @@ void pref_quant_layer_fp32_qint(
     #pragma HLS loop_tripcount min=1 max=max_seq_len/io_parallel
         init_max_min: for(int m = 0; m < io_parallel; m++){
         #pragma HLS unroll
-            input_max[m] = -1e10;
-            input_min[m] = 1e10;
+            input_max[m] = -1e32;
+            input_min[m] = 1e32;
         }
 
         load_input_loop: for(int k = 0; k < input_dim; k++){
         #pragma HLS PIPELINE II=1
             hls::vector<float, io_parallel> temp_pack = input_stream.read();
             for(int m = 0; m < io_parallel; m++){
+                // temp_pack[m] = (k + 1) * 0.001 + 1.5; // for debug
+
                 input_buffer[m][k] = temp_pack[m];
                 if(temp_pack[m] > input_max[m]){
                     input_max[m] = temp_pack[m];
@@ -38,7 +40,14 @@ void pref_quant_layer_fp32_qint(
                 if(temp_pack[m] < input_min[m]){
                     input_min[m] = temp_pack[m];
                 }
-            }                
+            }
+            
+            if(M==0 && k == 0) cout << "input data: ";
+            if(M==0 && k < 8) cout << temp_pack[0] << " ";
+            // if(M==0 && k == 7) cout << " ... ";
+            // if(M==0 && k > input_dim - 8) cout << temp_pack[1] << " ";   
+            if(M==0 && k == 7) cout << endl;  
+                    
         }
 
         if(is_act_asym){
@@ -48,6 +57,7 @@ void pref_quant_layer_fp32_qint(
             
             asym_cal_s_b_loop: for(int m = 0; m < io_parallel; m++){
             #pragma HLS PIPELINE II=1
+                // input_min[m] = input_min[m] > 0 ? 0 : input_min[m]; // when input_min > 0, set it to 0
                 s[m] = (input_max[m] - input_min[m]) / scale_base;
                 if(s[m] == 0) s[m] = 1;
                 b[m] = input_min[m];
@@ -142,12 +152,18 @@ void pref_dequant_layer_qint_fp32(
                     output_pack[m] = dequant_temp;
                 }
             }
-            output_stream.write(output_pack);                
+            output_stream.write(output_pack);
+
+            if(M==0 && k == 0) cout << "output data: ";
+            if(M==0 && k < 8) cout << output_pack[0] << " ";
+            // if(M==0 && k == 7) cout << " ... ";
+            // if(M==0 && k > output_dim - 8) cout << output_pack[1] << " ";   
+            if(M==0 && k == 7) cout << endl;          
         }
     }
 }
 
-template <int qint_bit, int io_parallel, int io_s_parallel, int max_input_dim, int head_num=1, int max_seq_len=MAX_PRE_SEQ_LEN>
+template <int qint_bit, int io_parallel, int io_s_parallel, int max_input_dim, int head_num=1, int is_signed=true, int max_seq_len=MAX_PRE_SEQ_LEN>
 void pref_static_sym_quant_layer_fp32_qint(
     tapa::istream<hls::vector<float, io_parallel>>& input_stream,
     tapa::istream<hls::vector<float, io_s_parallel>>& input_s_stream, //input's scale factor and zero point
@@ -155,7 +171,7 @@ void pref_static_sym_quant_layer_fp32_qint(
     int seq_len = max_seq_len,
     int input_dim = max_input_dim
 ){
-    const int scale_base = (1 << (qint_bit - 1));
+    const int scale_base = is_signed ? (1 << (qint_bit - 1)) : (1 << qint_bit);
 
     io_block_loop: for (int M = 0; M < seq_len/io_parallel; M++){
     #pragma HLS loop_tripcount min=1 max=max_seq_len/io_parallel
@@ -178,9 +194,13 @@ void pref_static_sym_quant_layer_fp32_qint(
                 for(int m = 0; m < io_parallel; m++){
                     float scale_temp = in_pack[m] / s[m];
                     int round_temp = round(scale_temp);
-                    int out_temp =  round_temp > scale_base - 1 ? scale_base - 1: 
+                    int out_temp;
+                    if(is_signed)
+                        out_temp =  round_temp > scale_base - 1 ? scale_base - 1: 
                                     round_temp < -scale_base ? -scale_base:
                                     round_temp;
+                    else
+                        out_temp =  round_temp > scale_base - 1 ? scale_base - 1: round_temp;
                     out_pack[m] = (ap_int<qint_bit>) out_temp;
                 }
                 output_stream.write(out_pack);
@@ -229,16 +249,17 @@ void pref_static_sym_dequant_layer_qint_fp32(
 }
 
 
-template <int qint_bit, int io_parallel, int max_input_dim, int head_num=1, int max_seq_len=MAX_PRE_SEQ_LEN, int decoder_layer_num=DECODER_LAYER_NUM>
+template <int qint_bit, int io_parallel, int max_input_dim, int head_num=1, int is_signed=true, int max_seq_len=MAX_PRE_SEQ_LEN, int decoder_layer_num=DECODER_LAYER_NUM>
 void pref_static_sym_per_tensor_quant_layer_fp32_qint(
     tapa::istream<hls::vector<float, io_parallel>>& input_stream,
     tapa::ostream<hls::vector<ap_int<qint_bit>, io_parallel>>& output_stream, //asym_quant: ap_uint<qint_bit>, sym_quant: ap_int<qint_bit>
     const float input_s[decoder_layer_num][head_num],
     int block_id,
     int seq_len = max_seq_len,
-    int input_dim = max_input_dim
+    int input_dim = max_input_dim,
+    float mha_scale_factor = 1.0
 ){
-    const int scale_base = (1 << (qint_bit - 1));
+    const int scale_base = is_signed ? (1 << (qint_bit - 1)) : (1 << qint_bit);
 
     io_block_loop: for (int M = 0; M < seq_len/io_parallel; M++){
     #pragma HLS loop_tripcount min=1 max=max_seq_len/io_parallel
@@ -248,14 +269,24 @@ void pref_static_sym_per_tensor_quant_layer_fp32_qint(
                 hls::vector<float, io_parallel> in_pack = input_stream.read();
                 hls::vector<ap_int<qint_bit>, io_parallel> out_pack;
                 for(int m = 0; m < io_parallel; m++){
-                    float scale_temp = in_pack[m] / input_s[block_id][H];
+                    float scale_temp = in_pack[m] / (mha_scale_factor * input_s[block_id][H]);
                     int round_temp = round(scale_temp);
-                    int out_temp =  round_temp > scale_base - 1 ? scale_base - 1: 
+                    int out_temp;
+                    if(is_signed)
+                        out_temp =  round_temp > scale_base - 1 ? scale_base - 1: 
                                     round_temp < -scale_base ? -scale_base:
                                     round_temp;
+                    else
+                        out_temp =  round_temp > scale_base - 1 ? scale_base - 1: round_temp;
                     out_pack[m] = (ap_int<qint_bit>) out_temp;
                 }
                 output_stream.write(out_pack);
+
+                if(M==0 && H == 0 && k == 0) cout << "mha input/output data: ";
+                if(M==0 && H == 0 && k < 8) cout << "(" << in_pack[0] << ", " << out_pack[0] << ") ";
+                if(M==0 && H == 0 && k == 7) cout << endl;
+
+
             }
         }
     }
@@ -283,7 +314,11 @@ void pref_static_sym_per_tensor_dequant_layer_qint_fp32(
                     dequant_loop: for(int m = 0; m < io_parallel; m++){
                         output_pack[m] = temp_pack[m] * input_s[block_id][h*act_head_num/weight_head_num+g] * weight_s[block_id][h];
                     }
-                    output_stream.write(output_pack);                
+                    output_stream.write(output_pack);
+                    
+                    if(M==0 && h == 0 && g==0 && k == 0) cout << "mha input/output data: ";
+                    if(M==0 && h == 0 && g==0 && k < 8) cout << "(" << temp_pack[0] << ", " << output_pack[0] << ") ";
+                    if(M==0 && h == 0 && g==0 && k == 7) cout << endl;
                 }
             }
         }
@@ -313,14 +348,16 @@ void dec_quant_layer_fp32_qint(
     
     init_max_min: for(int m = 0; m < block_parallel; m++){
     #pragma HLS unroll
-        input_max[m] = -1e10;
-        input_min[m] = 1e10;
+        input_max[m] = -1e32;
+        input_min[m] = 1e32;
     }
 
     load_input_loop: for(int k = 0; k < input_dim/block_parallel; k++){
     #pragma HLS PIPELINE II=1
         hls::vector<float, block_parallel> temp_pack = input_stream.read();
         for(int m = 0; m < block_parallel; m++){
+            // temp_pack[m] = ((m * input_dim/block_parallel + k) + 1) * 0.001 + 1.5; // for debug
+
             input_buffer[m][k] = temp_pack[m];
             if(temp_pack[m] > input_max[m]){
                 input_max[m] = temp_pack[m];
@@ -329,10 +366,9 @@ void dec_quant_layer_fp32_qint(
                 input_min[m] = temp_pack[m];
             }
         } 
-        if (k < 4) {
-            for(int m = 0; m < 4; m++)
-                cout << temp_pack[m] << " ";
-        }               
+        if(k == 0) cout << "input data: ";
+        if(k < 8) cout << temp_pack[0] << " ";
+        if(k == 7) cout << endl;
     }
 
     // Calculate final max and min
@@ -349,6 +385,7 @@ void dec_quant_layer_fp32_qint(
         float s;
         float b;
 
+        // final_min = final_min > 0 ? 0: final_min; // when input_min > 0, set it to 0
         s = (final_max - final_min) / scale_base;
         if(s == 0) s = 1;
         b = final_min;
@@ -479,6 +516,10 @@ void dec_dequant_layer_qint_fp32_bandwidth(
                 }
             }
             output_stream.write(output_pack);
+
+            if(k==0 && n == 0) cout << "output data: ";
+            if(k==0 && n < 8) cout << output_pack[0] << " ";
+            if(k==0 && n == 7) cout << endl;
         }                
     }
 }
@@ -503,8 +544,8 @@ void dec_MHA_quant_layer_fp32_qint(
     head_loop: for(int H = 0; H < head_num/head_parallel; H++){
         init_max_min: for(int m = 0; m < head_parallel; m++){
         #pragma HLS unroll
-            input_max[m] = -1e10;
-            input_min[m] = 1e10;
+            input_max[m] = -1e32;
+            input_min[m] = 1e32;
         }
 
         load_input_loop: for(int k = 0; k < input_dim; k++){
@@ -610,14 +651,14 @@ void dec_MHA_dequant_layer_qint_fp32(
 }
 
 
-template <int qint_bit, int head_parallel, int max_input_dim, int head_num=1>
+template <int qint_bit, int head_parallel, int max_input_dim, int head_num=1, bool is_signed=true>
 void dec_MHA_static_sym_quant_layer_fp32_qint(
     tapa::istream<hls::vector<float, head_parallel>>& input_stream,
     tapa::istream<hls::vector<float, head_parallel>>& input_s_stream, //input's scale factor and zero point
     tapa::ostream<hls::vector<ap_int<qint_bit>, head_parallel>>& output_stream, //asym_quant: ap_uint<qint_bit>, sym_quant: ap_int<qint_bit>
     int input_dim = max_input_dim
 ){
-    const int scale_base = (1 << (qint_bit - 1));
+    const int scale_base = is_signed ? (1 << (qint_bit - 1)) : (1 << qint_bit);
 
     head_num_loop: for (int H = 0; H < head_num/head_parallel; H++){
         auto s_pack = input_s_stream.read();
@@ -630,9 +671,13 @@ void dec_MHA_static_sym_quant_layer_fp32_qint(
             for(int m = 0; m < head_parallel; m++){
                 float scale_temp = in_pack[m] / s_pack[m];
                 int round_temp = round(scale_temp);
-                int out_temp =  round_temp > scale_base - 1 ? scale_base - 1: 
+                int out_temp;
+                if(is_signed)
+                    out_temp =  round_temp > scale_base - 1 ? scale_base - 1: 
                                 round_temp < -scale_base ? -scale_base:
                                 round_temp;
+                else
+                    out_temp =  round_temp > scale_base - 1 ? scale_base - 1: round_temp;
                 out_pack[m] = (ap_int<qint_bit>) out_temp;
             }
             output_stream.write(out_pack);
@@ -669,38 +714,17 @@ void dec_MHA_static_sym_dequant_layer_qint_fp32(
 }
 
 
-template <int qint_bit, int head_parallel, int V_head_num, int V_head_dim=HEAD_DIM>
-void dec_V_static_sym_quant_layer_fp32_qint_template(
-    tapa::istream<hls::vector<float, head_parallel>>& input_stream,
-    tapa::istream<hls::vector<float, head_parallel>>& input_s_stream, 
-    tapa::ostream<hls::vector<ap_int<qint_bit>, head_parallel>>& output_stream
-){
-    head_loop_0: for (int H = 0; H < V_head_num/head_parallel; H++){
-        read_v_s_loop_0: for(int k = 0; k < V_head_dim; k++){
-        #pragma HLS pipeline II=1
-            hls::vector<float, head_parallel> input_pack = input_stream.read();
-            hls::vector<float, head_parallel> input_s_pack = input_s_stream.read();
-            hls::vector<ap_int<qint_bit>, head_parallel> output_pack;
-
-            for(int i = 0; i < head_parallel; i++){
-                output_pack[i] = (ap_int<qint_bit>) round(input_pack[i]/input_s_pack[i]);
-            }
-            output_stream.write(output_pack);
-        }
-    }
-}
-
-
-template <int qint_bit, int head_parallel, int max_input_dim, int head_num=1, int decoder_layer_num=DECODER_LAYER_NUM>
+template <int qint_bit, int head_parallel, int max_input_dim, int head_num=1, bool is_signed=true, int decoder_layer_num=DECODER_LAYER_NUM>
 void dec_MHA_static_sym_per_tensor_quant_layer_fp32_qint(
     tapa::istream<hls::vector<float, head_parallel>>& input_stream,
     tapa::ostream<hls::vector<ap_int<qint_bit>, head_parallel>>& output_stream, //asym_quant: ap_uint<qint_bit>, sym_quant: ap_int<qint_bit>
     const float input_s[decoder_layer_num][head_num],
     int block_id,
-    int input_dim = max_input_dim
+    int input_dim = max_input_dim,
+    float mha_scale_factor = 1.0
 ){
     #pragma HLS ARRAY_PARTITION variable=input_s type=cyclic factor=head_parallel dim=2
-    const int scale_base = (1 << (qint_bit - 1));
+    const int scale_base = is_signed ? (1 << (qint_bit - 1)) : (1 << qint_bit);
     
     head_num_loop: for (int H = 0; H < head_num/head_parallel; H++){
         sym_quant_loop: for(int k = 0; k < input_dim; k++){
@@ -708,27 +732,25 @@ void dec_MHA_static_sym_per_tensor_quant_layer_fp32_qint(
         #pragma HLS PIPELINE II=1
             hls::vector<float, head_parallel> in_pack = input_stream.read();
 
-            // if (k < 4) {
-            // for(int m = 0; m < 4; m++)
-            //     cout << in_pack[m] << " ";
-            // }      
-
             hls::vector<ap_int<qint_bit>, head_parallel> out_pack;
             for(int m = 0; m < head_parallel; m++){
-                float scale_temp = in_pack[m] / input_s[block_id][m * (head_num/head_parallel) + H];
+                float scale_temp = in_pack[m] / (mha_scale_factor * input_s[block_id][m * (head_num/head_parallel) + H]);
                 int round_temp = round(scale_temp);
-                int out_temp =  round_temp > scale_base - 1 ? scale_base - 1: 
+                int out_temp;
+                if(is_signed)
+                    out_temp =  round_temp > scale_base - 1 ? scale_base - 1: 
                                 round_temp < -scale_base ? -scale_base:
                                 round_temp;
+                else
+                    out_temp =  round_temp > scale_base - 1 ? scale_base - 1: round_temp;
                 out_pack[m] = (ap_int<qint_bit>) out_temp;
             }
-
-            // if (k < 4) {
-            // for(int m = 0; m < 4; m++)
-            //     cout << out_pack[m] << " ";
-            // }      
-
             output_stream.write(out_pack);
+
+            // if(H == 0 && k == 0) cout << "head " << H << " scale: " << input_s[block_id][H] << endl;
+            if(H == 0 && k == 0) cout << "input/output data: ";
+            if(H == 0 && k < 8) cout << "(" << in_pack[0] << ", " << out_pack[0] << ") ";;
+            if(H == 0 && k == 7) cout << endl;
         }
     }
 }
@@ -767,22 +789,18 @@ void dec_MHA_static_sym_per_tensor_dequant_layer_qint_fp32(
         #pragma HLS loop_tripcount min=1 max=max_output_dim
         #pragma HLS PIPELINE II=1
             hls::vector<ap_int<qint_bit>, head_parallel> temp_pack = input_stream.read();
-            // if (k < 4) {
-            // for(int m = 0; m < 4; m++)
-            //     cout << temp_pack[m] << " ";
-            // }      
-
             hls::vector<float, head_parallel> output_pack;
             dequant_loop: for(int m = 0; m < head_parallel; m++){
                 int a_H = m * (act_head_num/head_parallel) + h;
                 int w_H = a_H / (act_head_num/weight_head_num);
                 output_pack[m] = temp_pack[m] * input_s[block_id][a_H] * weight_s[block_id][w_H];
-            }
-            // if (k < 4) {
-            // for(int m = 0; m < 4; m++)
-            //     cout << output_pack[m] << " ";
-            // }      
-            output_stream.write(output_pack);                
+            }  
+            output_stream.write(output_pack); 
+            
+            // if(h == 0 && k == 0) cout << "head " << 0 << " act_scale: " << input_s[block_id][0] << " weight_scale: " << weight_s[block_id][0] << endl;
+            if(h == 0 && k == 0) cout << "input/output data: ";
+            if(h == 0 && k < 8) cout << "(" << temp_pack[0] << ", " << output_pack[0] << ") ";;
+            if(h == 0 && k == 7) cout << endl;
         }
     }
 }

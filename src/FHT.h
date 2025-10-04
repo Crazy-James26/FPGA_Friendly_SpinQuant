@@ -4,7 +4,7 @@
 #include "config.h"
 
 
-template <typename T, int io_parallel, int io_hidden_dim=HIDDEN_DIM, int log2_io_hidden_dim=log2_HIDDEN_DIM, int max_seq_len=MAX_PRE_SEQ_LEN, bool enable_scale=false>
+template <typename T, int io_parallel, int io_hidden_dim=HIDDEN_DIM, int log2_io_hidden_dim=log2_HIDDEN_DIM, int max_seq_len=MAX_PRE_SEQ_LEN>
 void pref_FHT(
     tapa::istream<hls::vector<T, io_parallel>>& data_in,
     tapa::ostream<hls::vector<T, io_parallel>>& data_out,
@@ -58,20 +58,15 @@ void pref_FHT(
         Write_Loop: for (int i = 0; i < io_hidden_dim; i++) {
         #pragma HLS PIPELINE II=1
             hls::vector<T, io_parallel> out_pack;
-            if(enable_scale) {
-                for(int k = 0; k < io_parallel; k++) {
-                    out_pack[k] = buffer[log2_io_hidden_dim % 2][i][k] / scale_factor;
-                }
-            } 
-            else {
-                out_pack = buffer[log2_io_hidden_dim % 2][i];
+            for(int k = 0; k < io_parallel; k++) {
+                out_pack[k] = buffer[log2_io_hidden_dim % 2][i][k] / scale_factor;
             }
             data_out.write(out_pack);
         }
     }
 }
 
-template <typename T, int block_parallel, int io_hidden_dim=INTER_DIM, int log2_io_hidden_dim=log2_INTER_DIM, bool enable_scale=false>
+template <typename T, int block_parallel, int io_hidden_dim=INTER_DIM, int log2_io_hidden_dim=log2_INTER_DIM>
 void dec_FHT(
     tapa::istream<hls::vector<T, block_parallel>>& data_in,
     tapa::ostream<hls::vector<T, block_parallel>>& data_out,
@@ -126,13 +121,8 @@ void dec_FHT(
     Write_Loop: for (int i = 0; i < io_hidden_dim/block_parallel; i++) {
     #pragma HLS PIPELINE II=1
         hls::vector<T, block_parallel> out_pack;
-        if(enable_scale) {
-            for(int k = 0; k < block_parallel; k++) {
-                out_pack[k] = buffer[log2_io_hidden_dim % 2][i][k] / scale_factor;
-            }
-        } 
-        else {
-            out_pack = buffer[log2_io_hidden_dim % 2][i];
+        for(int k = 0; k < block_parallel; k++) {
+            out_pack[k] = buffer[log2_io_hidden_dim % 2][i][k] / scale_factor;
         }
         data_out.write(out_pack);
     }

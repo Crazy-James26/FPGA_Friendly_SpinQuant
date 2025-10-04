@@ -68,15 +68,41 @@ void pref_Layer_Norm(
             A_square_sum[i][3] = 0;
         }
 
-        in_buf_loop: for (int k = 0; k < io_hidden_dim; k++) {
-        #pragma HLS pipeline II=1
-        #pragma HLS dependence variable=A_square_sum inter false
-            hls::vector<T, io_parallel> temp_pack = input_stream.read();
+        // in_buf_loop: for (int k = 0; k < io_hidden_dim; k++) {
+        // #pragma HLS pipeline II=1
+        //     hls::vector<T, io_parallel> temp_pack = input_stream.read();
+        //     for(int i = 0; i < io_parallel; i++){
+        //         T temp = temp_pack[i];
+        //         A[i][k] = temp;
+        //         A_square_sum[i][k % 4] += temp * temp;
+        //     }
+        // }
+
+        in_buf_loop: for (int k = 0; k < io_hidden_dim/4; k++) {
+        #pragma HLS pipeline II=4
+            hls::vector<T, io_parallel> temp_pack_0 = input_stream.read();
             for(int i = 0; i < io_parallel; i++){
-                T temp = temp_pack[i];
-                A[i][k] = temp;
-                A_square_sum[i][k % 4] += temp * temp;
-                // #pragma HLS bind_op variable=A_square_sum op=fadd impl=fulldsp
+                T temp = temp_pack_0[i];
+                A[i][4 * k] = temp;
+                A_square_sum[i][0] += temp * temp;
+            }
+            hls::vector<T, io_parallel> temp_pack_1 = input_stream.read();
+            for(int i = 0; i < io_parallel; i++){
+                T temp = temp_pack_1[i];
+                A[i][4 * k + 1] = temp;
+                A_square_sum[i][1] += temp * temp;
+            }
+            hls::vector<T, io_parallel> temp_pack_2 = input_stream.read();
+            for(int i = 0; i < io_parallel; i++){
+                T temp = temp_pack_2[i];
+                A[i][4 * k + 2] = temp;
+                A_square_sum[i][2] += temp * temp; 
+            }
+            hls::vector<T, io_parallel> temp_pack_3 = input_stream.read();
+            for(int i = 0; i < io_parallel; i++){
+                T temp = temp_pack_3[i];
+                A[i][4 * k + 3] = temp;
+                A_square_sum[i][3] += temp * temp;
             }
         }
 
@@ -217,15 +243,44 @@ void dec_Layer_Norm(
         A_square_sum[i][3] = 0;
     }
 
-    in_buf_loop: for (int k = 0; k < io_hidden_dim/block_parallel; k++) {
-    #pragma HLS pipeline II=1
-    #pragma HLS dependence variable=A_square_sum inter false
-        hls::vector<T, block_parallel> temp_pack = input_stream.read();
+    // in_buf_loop: for (int k = 0; k < io_hidden_dim/block_parallel; k++) {
+    // #pragma HLS pipeline II=1
+    //     hls::vector<T, block_parallel> temp_pack = input_stream.read();
+    //     for(int i = 0; i < block_parallel; i++){
+    //         T temp = temp_pack[i];
+    //         A[i][k] = temp;
+    //         A_square_sum[i][k % 4] += temp * temp;
+    //     }
+    //     if(k == 0) cout << "LN input data: ";
+    //     if(k < 16) cout << temp_pack[0] << " ";
+    //     if(k == 15) cout << endl;
+    // }
+
+    in_buf_loop: for (int k = 0; k < io_hidden_dim/block_parallel/4; k++) {
+    #pragma HLS pipeline II=4
+        hls::vector<T, block_parallel> temp_pack_0 = input_stream.read();
         for(int i = 0; i < block_parallel; i++){
-            T temp = temp_pack[i];
-            A[i][k] = temp;
-            A_square_sum[i][k % 4] += temp * temp;
-            // #pragma HLS bind_op variable=A_square_sum op=fadd impl=fulldsp
+            T temp = temp_pack_0[i];
+            A[i][4 * k] = temp;
+            A_square_sum[i][0] += temp * temp;
+        }
+        hls::vector<T, block_parallel> temp_pack_1 = input_stream.read();
+        for(int i = 0; i < block_parallel; i++){
+            T temp = temp_pack_1[i];
+            A[i][4 * k + 1] = temp;
+            A_square_sum[i][1] += temp * temp;
+        }
+        hls::vector<T, block_parallel> temp_pack_2 = input_stream.read();
+        for(int i = 0; i < block_parallel; i++){
+            T temp = temp_pack_2[i];
+            A[i][4 * k + 2] = temp;
+            A_square_sum[i][2] += temp * temp; 
+        }
+        hls::vector<T, block_parallel> temp_pack_3 = input_stream.read();
+        for(int i = 0; i < block_parallel; i++){
+            T temp = temp_pack_3[i];
+            A[i][4 * k + 3] = temp;
+            A_square_sum[i][3] += temp * temp;
         }
     }
 
@@ -256,6 +311,9 @@ void dec_Layer_Norm(
             }
         }
         output_stream.write(outp_pack);
+        if(k == 0) cout << "LN output data: ";
+        if(k < 16) cout << outp_pack[0] << " ";
+        if(k == 15) cout << endl;
     }
 
 
